@@ -29,7 +29,8 @@
 
 <script>/* [HEAD] anti-FOUC */(function(){try{var t=localStorage.getItem('argo.theme');
   if(t!=='light'&&t!=='dark')t=matchMedia('(prefers-color-scheme:dark)').matches?'dark':'light';
-  document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
+  document.documentElement.setAttribute('data-theme',t);
+  var sc=localStorage.getItem('argo.screen');if(sc==='mobile'||sc==='desktop')document.documentElement.setAttribute('data-screen',sc);}catch(e){}})();</script>
 <meta name="theme-color" content="#F6F4EE" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#15171C" media="(prefers-color-scheme: dark)">
 <link rel="manifest" href="manifest.webmanifest">
@@ -303,6 +304,13 @@ textarea.field{resize:vertical;line-height:1.6;min-height:90px}
 .widget h4{margin:0 0 11px;font-size:12px;display:flex;align-items:center;gap:8px}
 .widget h4 .eyebrow{margin-left:auto}
 @media(min-width:560px){.kpi{grid-template-columns:repeat(4,1fr)}.grid{grid-template-columns:repeat(3,1fr)}}
+/* [CSS] modalità schermo: forza vista mobile/desktop a prescindere dalla viewport (auto = default) */
+html[data-screen="mobile"] #app,html[data-screen="mobile"] .bottomnav,html[data-screen="mobile"] .sheet{max-width:430px}
+html[data-screen="mobile"] .kpi{grid-template-columns:repeat(2,1fr)}
+html[data-screen="mobile"] .grid{grid-template-columns:repeat(2,1fr)}
+html[data-screen="desktop"] #app,html[data-screen="desktop"] .bottomnav,html[data-screen="desktop"] .sheet{max-width:1080px}
+html[data-screen="desktop"] .kpi{grid-template-columns:repeat(4,1fr)}
+html[data-screen="desktop"] .grid{grid-template-columns:repeat(4,1fr)}
 
 /* SPESE / NOTE list */
 .listitem{display:flex;align-items:center;gap:12px;padding:12px 4px;border-bottom:1px solid var(--border-subtle)}
@@ -1151,6 +1159,8 @@ function setLayoutVar(k,val){document.documentElement.style.setProperty('--'+k,v
 function applyLayout(){const l=(DB.settings().layout)||{};['ui','sp','cr','tx'].forEach(k=>{if(l[k])document.documentElement.style.setProperty('--'+k,l[k]);});}
 function setAccent(hex){const s=DB.settings();s.accent=hex;DB.saveSettings(s);document.documentElement.style.setProperty('--accent',hex);}
 function applyAccent(){const a=DB.settings().accent;if(a)document.documentElement.style.setProperty('--accent',a);}
+function applyScreen(){const m=DB.settings().screen;if(m==='mobile'||m==='desktop')document.documentElement.setAttribute('data-screen',m);else document.documentElement.removeAttribute('data-screen');}
+function setScreen(m){const s=DB.settings();s.screen=m;DB.saveSettings(s);try{localStorage.setItem('argo.screen',m);}catch(e){}applyScreen();}
 function setLang(l){LANG=l;const s=DB.settings();s.lang=l;DB.saveSettings(s);document.documentElement.lang=l;render();}
 function setSync(statev){const b=$('#syncBadge'),txt=$('#syncText');b.className='synced '+(statev||'');
  txt.textContent=statev==='on'?T('connesso'):(statev==='off'?'Offline':T('locale'));}
@@ -1161,6 +1171,8 @@ function openSettings(){const s=DB.settings(),l=s.layout||{};
   <h2 class="sec" style="margin-top:0">${T('aspetto')}</h2>
   <div class="settingrow"><div class="grow"><div class="lbl">${T('tema')}</div></div>
    <div class="seg"><button data-th="light" class="${document.documentElement.getAttribute('data-theme')==='light'?'on':''}">${T('it')==='it'?'Chiaro':'Light'}</button><button data-th="dark" class="${document.documentElement.getAttribute('data-theme')==='dark'?'on':''}">${LANG==='it'?'Scuro':'Dark'}</button></div></div>
+  <div class="settingrow"><div class="grow"><div class="lbl">${LANG==='it'?'Schermo':'Screen'}</div></div>
+   <div class="seg"><button data-sc="auto" class="${(s.screen||'auto')==='auto'?'on':''}">Auto</button><button data-sc="mobile" class="${s.screen==='mobile'?'on':''}">Mobile</button><button data-sc="desktop" class="${s.screen==='desktop'?'on':''}">Desktop</button></div></div>
   <div class="settingrow"><div class="grow"><div class="lbl">${T('lingua')}</div></div>
    <div class="seg"><button data-lg="it" class="${LANG==='it'?'on':''}">IT</button><button data-lg="en" class="${LANG==='en'?'on':''}">EN</button></div></div>
   <div class="settingrow"><div class="grow"><div class="lbl">${T('accento')}</div></div>
@@ -1205,6 +1217,7 @@ function openSettings(){const s=DB.settings(),l=s.layout||{};
  // wiring settings
  $$('#sheetBody [data-th]').forEach(b=>b.onclick=()=>{setTheme(b.dataset.th);$$('#sheetBody [data-th]').forEach(x=>x.classList.toggle('on',x===b));});
  $$('#sheetBody [data-lg]').forEach(b=>b.onclick=()=>{setLang(b.dataset.lg);openSettings();});
+ $$('#sheetBody [data-sc]').forEach(b=>b.onclick=()=>{setScreen(b.dataset.sc);$$('#sheetBody [data-sc]').forEach(x=>x.classList.toggle('on',x===b));});
  $$('#sheetBody [data-ac]').forEach(b=>b.onclick=()=>{setAccent(b.dataset.ac);$$('#sheetBody [data-ac]').forEach(x=>x.classList.toggle('on',x===b));});
  const rng=(id,key,vid)=>{const r=$('#'+id);r.oninput=()=>{document.documentElement.style.setProperty('--'+key,r.value);$('#'+vid).textContent=Math.round(r.value*100)+'%';};
   r.onchange=()=>setLayoutVar(key,r.value);};
@@ -1229,7 +1242,7 @@ function init(){
  setTheme(document.documentElement.getAttribute('data-theme')||'light');
  $('[data-act="open-settings"]').innerHTML=ic('set');
  $('[data-act="open-export"]').innerHTML=ic('share');
- applyLayout();applyAccent();
+ applyLayout();applyAccent();applyScreen();
  seedIfEmpty();
  materializeRoutines();
  carryOverGoals();
