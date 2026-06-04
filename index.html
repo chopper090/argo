@@ -183,7 +183,11 @@ main{flex:1 1 auto;padding:16px 16px 120px;width:100%}
 .introicon{width:76px;height:76px;border-radius:21px;box-shadow:var(--shadow-lg)}
 .introwrap h2{margin:1px 0 0;font-size:clamp(23px,6vw,31px);letter-spacing:-.02em}
 .introtag{color:var(--text-muted);font-size:15px;margin:0;max-width:32ch;line-height:1.5}
-.introvid{width:100%;border-radius:var(--r-lg);border:1px solid var(--border-strong);box-shadow:var(--shadow-lg);background:#000;aspect-ratio:16/10}
+.introhead2{display:flex;flex-direction:column;align-items:center;gap:14px}
+.introvidwrap{position:relative;display:inline-block;line-height:0;max-width:100%}
+.introvid{display:block;height:min(64vh,520px);max-width:100%;aspect-ratio:9/16;border-radius:var(--r-lg);border:1px solid var(--border-strong);box-shadow:var(--shadow-lg);background:#000;object-fit:cover;cursor:pointer}
+.introaudio{position:absolute;bottom:12px;left:50%;transform:translateX(-50%);display:inline-flex;align-items:center;gap:6px;background:rgba(20,18,12,.6);color:#fff;border-radius:var(--r-pill);padding:7px 14px;font-size:12px;font-weight:700;backdrop-filter:blur(4px)}
+.introaudio svg{width:15px;height:15px;stroke:#fff}
 .introph{width:100%;background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);box-shadow:var(--shadow-md);padding:18px}
 .introhi{display:flex;flex-direction:column;gap:12px;text-align:left}
 .introhi .li{display:flex;align-items:center;gap:12px;font-size:14px;font-weight:600}
@@ -461,7 +465,8 @@ const P={home:"M3 11l9-7 9 7M5 10v9a1 1 0 0 0 1 1h3v-6h6v6h3a1 1 0 0 0 1-1v-9",
  download:"M12 4v12M8 12l4 4 4-4M5 20h14",edit:"M4 20h4L20 8l-4-4L4 16z",x:"M6 6l12 12M18 6L6 18",
  target:"M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18zM12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8zM12 11.5a.5.5 0 1 0 0 1 .5.5 0 0 0 0-1z",
  repeat:"M17 2l4 4-4 4M3 11v-1a4 4 0 0 1 4-4h14M7 22l-4-4 4-4M21 13v1a4 4 0 0 1-4 4H3",
- flag:"M5 21V4M5 4h13l-3 4 3 4H5"};
+ flag:"M5 21V4M5 4h13l-3 4 3 4H5",
+ vol:"M11 5 6 9H3v6h3l5 4zM15.5 8.5a5 5 0 0 1 0 7M19 5a9 9 0 0 1 0 14"};
 const ic=(n,a='')=>`<svg ${a} width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="${P[n]||''}"/></svg>`;
 
 /* grafici SVG hand-rolled */
@@ -1052,19 +1057,26 @@ function showIntro(){
    ? [['target','Obiettivi giornalieri, settimanali e a lungo termine'],['repeat','Routine ricorrenti e Modalità Oggi'],['exp','Spese e note, con sync opzionale']]
    : [['target','Daily, weekly and long-term goals'],['repeat','Recurring routines and Today mode'],['exp','Expenses and notes, optional sync']];
  $('#intro').innerHTML=`<div class="introwrap">
-   <img src="icon-192.png" alt="" class="introicon">
-   <div><div class="eyebrow">${T('benvenuto')}</div><h2>Obiettivi &amp; Note</h2></div>
-   <p class="introtag">${T('introTag')}</p>
-   <div id="introMedia" style="width:100%"></div>
+   <div id="introHeader" class="introhead2">
+    <img src="icon-192.png" alt="" class="introicon">
+    <div><div class="eyebrow">${T('benvenuto')}</div><h2>Obiettivi &amp; Note</h2></div>
+    <p class="introtag">${T('introTag')}</p></div>
+   <div id="introMedia" style="width:100%;display:flex;justify-content:center"></div>
    <div id="introPh" class="introph"><div class="introhi">${items.map(([i,t])=>`<div class="li"><span class="ic">${ic(i)}</span><span>${t}</span></div>`).join('')}</div></div>
    <button class="btn" id="introStart">${ic('check')} ${T('inizia')}</button>
    <button class="introskip" id="introSkip">${T('salta')}</button></div>`;
  $('#intro').classList.add('on');
  $('#introStart').onclick=dismissIntro; $('#introSkip').onclick=dismissIntro;
- /* Inietta il <video> solo se intro.mp4 esiste davvero (evita un media element perennemente in caricamento). */
+ /* Se intro.mp4 esiste: video a tutto focus (header/placeholder nascosti), autoplay muto, tap per l'audio, chiusura a fine. */
  fetch('intro.mp4',{method:'HEAD'}).then(r=>{if(!r.ok)return;
-   $('#introMedia').innerHTML='<video id="introVid" class="introvid" playsinline controls autoplay muted poster="icon-512.png"><source src="intro.mp4" type="video/mp4"></video>';
-   const ph=$('#introPh');if(ph)ph.style.display='none';
+   $('#introMedia').innerHTML=`<div class="introvidwrap"><video id="introVid" class="introvid" playsinline autoplay muted poster="icon-512.png"><source src="intro.mp4" type="video/mp4"></video><button class="introaudio" id="introAudio">${ic('vol')} ${LANG==='it'?'Audio':'Sound'}</button></div>`;
+   ['introHeader','introPh','introStart'].forEach(id=>{const e=$('#'+id);if(e)e.style.display='none';});
+   const v=$('#introVid');
+   const unmute=()=>{v.muted=false;v.play().catch(()=>{});const a=$('#introAudio');if(a)a.style.display='none';};
+   $('#introAudio').onclick=unmute;
+   v.onclick=()=>{if(v.paused)v.play().catch(()=>{});unmute();};
+   v.addEventListener('ended',()=>dismissIntro(),{once:true});
+   v.play().catch(()=>{});
  }).catch(()=>{});
 }
 function dismissIntro(){LS.set('introSeen',true);const v=$('#introVid');if(v){try{v.pause();}catch(e){}}
