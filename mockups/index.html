@@ -1,0 +1,1035 @@
+<!DOCTYPE html>
+<html lang="it" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Obiettivi &amp; Note — Mockup · Fase 1</title>
+
+<!-- =====================================================================
+     OBIETTIVI & NOTE (codename "Argo") — GALLERY MOCKUP · FASE 1
+     File statico, self-contained, ZERO logica reale / ZERO dati veri.
+     Scopo: far scegliere a Marco la DIREZIONE di render vedendo gli screen.
+
+     TABLE OF CONTENTS
+       [HEAD]  anti-FOUC · meta theme-color · fonts
+       [CSS-1] design tokens (light/dark CALDI) + categorical palette
+       [CSS-2] gallery chrome (appbar, controls, stage, settings, focus)
+       [CSS-3] device frames (phone / desktop)
+       [CSS-4] componenti condivisi (card, check, chip, ring, chart, nav)
+       [CSS-5] skin per direzione  .dir-A (compatta) .dir-B (ariosa) .dir-C (griglia)
+       [JS-1]  utils (slug NFD, i18n, icone SVG, helper grafici)
+       [JS-2]  DATA finti
+       [JS-3]  render schermate (home/dash/spesa/nota × A/B/C)
+       [JS-4]  render stage (confronta / esplora) + frames
+       [JS-5]  wiring controlli (tema, lingua, device, layout-vars, focus-mode)
+     ===================================================================== -->
+
+<!-- [HEAD] anti-FOUC: setta data-theme PRIMA del primo paint -->
+<script>(function(){try{var t=localStorage.getItem('argo.theme');
+  if(t!=='light'&&t!=='dark')t=matchMedia('(prefers-color-scheme:dark)').matches?'dark':'light';
+  document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
+
+<meta name="theme-color" content="#F6F4EE" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#15171C" media="(prefers-color-scheme: dark)">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet">
+
+<style>
+/* ============================ [CSS-1] TOKENS ============================ */
+:root{
+  color-scheme: light;
+  /* superfici calde (crema/bruno, MAI grigio neutro) */
+  --bg:#F6F4EE; --surface:#FFFFFF; --surface-2:#EFECE3; --surface-3:#E6E1D2;
+  --border:#DDD7C7; --border-strong:#C5BDA6; --border-subtle:#ECE7DA;
+  --text:#1A1D24; --text-muted:#5B626E; --text-subtle:#7B8290; --text-inverse:#FFFFFF;
+  /* accento-firma del progetto: terracotta caldo (≠ blu trainer, ≠ ambra guida) */
+  --accent:#C15F3C; --accent-2:#E0A028; --accent-soft:#F3E4D8;
+  --ok:#5E8C4A; --ok-bg:#E7EFDD; --warn:#BD7223; --bad:#C0492F;
+  /* raggi / ombre CALDE (rgba bruno) */
+  --r-sm:8px; --r-md:13px; --r-lg:20px; --r-pill:999px;
+  --shadow-sm:0 1px 2px rgba(20,18,12,.05);
+  --shadow-md:0 1px 3px rgba(20,18,12,.07),0 2px 10px rgba(20,18,12,.05);
+  --shadow-lg:0 4px 16px rgba(20,18,12,.09),0 12px 40px rgba(20,18,12,.11);
+  --font-ui:"Inter",-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif;
+  --font-mono:"JetBrains Mono",ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+  /* palette categoriale spese (calda, distinta — NON la palette gradi musicale) */
+  --cat-spesa:#C15F3C; --cat-cibo:#E0A028; --cat-trasporti:#4E8D7C;
+  --cat-casa:#7A6FB0; --cat-svago:#D06A8C; --cat-varie:#9A8E78;
+}
+:root[data-theme="dark"]{
+  color-scheme: dark;
+  --bg:#15171C; --surface:#1C1F26; --surface-2:#232730; --surface-3:#2C313C;
+  --border:#2F3540; --border-strong:#434A57; --border-subtle:#232730;
+  --text:#ECE9E0; --text-muted:#A8AEBA; --text-subtle:#858C99; --text-inverse:#15171C;
+  --accent:#E07A52; --accent-2:#EBB44E; --accent-soft:#2E2620;
+  --ok:#7FB069; --ok-bg:#26301F; --warn:#D89A4A; --bad:#E0795E;
+  --shadow-sm:0 1px 2px rgba(0,0,0,.30);
+  --shadow-md:0 1px 3px rgba(0,0,0,.40),0 2px 10px rgba(0,0,0,.35);
+  --shadow-lg:0 4px 16px rgba(0,0,0,.50),0 12px 40px rgba(0,0,0,.55);
+  --cat-spesa:#D8714C; --cat-cibo:#EBB44E; --cat-trasporti:#5FA593;
+  --cat-casa:#9488C7; --cat-svago:#E083A3; --cat-varie:#B0A488;
+}
+
+*{box-sizing:border-box}
+html,body{margin:0}
+body{
+  background:var(--bg); color:var(--text); font-family:var(--font-ui);
+  font-size:16px; line-height:1.55; -webkit-font-smoothing:antialiased;
+  min-height:100vh;
+}
+.mono{font-family:var(--font-mono)}
+/* micro-etichetta: la firma tipografica */
+.eyebrow{font-family:var(--font-mono); font-size:10px; font-weight:600;
+  letter-spacing:.22em; text-transform:uppercase; color:var(--text-muted)}
+button{font-family:inherit; cursor:pointer; color:inherit}
+::-webkit-scrollbar{width:10px;height:10px}
+::-webkit-scrollbar-thumb{background:var(--border-strong);border-radius:99px;border:3px solid var(--bg)}
+
+/* ====================== [CSS-2] GALLERY CHROME ========================= */
+.appbar{
+  position:sticky; top:0; z-index:30; display:flex; align-items:center; gap:16px;
+  padding:14px clamp(16px,4vw,40px); background:color-mix(in srgb,var(--bg) 86%,transparent);
+  backdrop-filter:blur(12px); border-bottom:1px solid var(--border);
+}
+.brand{display:flex; flex-direction:column; gap:2px; margin-right:auto}
+.brand h1{margin:0; font-size:18px; font-weight:700; letter-spacing:-.01em}
+.brand .eyebrow{color:var(--accent)}
+.iconbtn{
+  width:40px; height:40px; display:grid; place-items:center; background:var(--surface);
+  border:1px solid var(--border); border-radius:var(--r-md); box-shadow:var(--shadow-sm);
+  transition:.15s ease;
+}
+.iconbtn:hover{border-color:var(--border-strong); transform:translateY(-1px); box-shadow:var(--shadow-md)}
+.iconbtn svg{width:20px;height:20px}
+.langbtn{width:auto; padding:0 12px; font-family:var(--font-mono); font-size:12px; font-weight:600; letter-spacing:.1em}
+
+.controls{
+  position:sticky; top:69px; z-index:20; display:flex; flex-wrap:wrap; align-items:center; gap:12px 18px;
+  padding:14px clamp(16px,4vw,40px); background:color-mix(in srgb,var(--bg) 86%,transparent);
+  backdrop-filter:blur(12px); border-bottom:1px solid var(--border);
+}
+.cgroup{display:flex; flex-direction:column; gap:6px}
+.cgroup>.eyebrow{padding-left:4px}
+.seg{display:inline-flex; background:var(--surface-2); border:1px solid var(--border); border-radius:var(--r-pill); padding:3px}
+.seg button{
+  border:0; background:transparent; padding:7px 14px; border-radius:var(--r-pill);
+  font-size:13px; font-weight:600; color:var(--text-muted); transition:.15s ease; white-space:nowrap;
+  display:inline-flex; align-items:center; gap:7px;
+}
+.seg button svg{width:15px;height:15px}
+.seg button.on{background:var(--surface); color:var(--text); box-shadow:var(--shadow-sm)}
+.seg.accent button.on{background:var(--accent); color:#fff}
+
+.hint{margin-left:auto; font-family:var(--font-mono); font-size:10px; letter-spacing:.14em;
+  text-transform:uppercase; color:var(--text-subtle)}
+
+/* stage: contenitore degli screen. Qui vivono le layout-vars regolabili. */
+.stage{
+  --ui:1; --sp:1; --cr:1; --tx:1;
+  padding:clamp(20px,4vw,44px); display:flex; flex-direction:column; gap:30px;
+  min-height:60vh;
+}
+.lane{display:flex; flex-wrap:wrap; gap:34px; justify-content:center; align-items:flex-start}
+.col{display:flex; flex-direction:column; gap:14px; align-items:center}
+.col .cap{max-width:380px; text-align:center}
+.col .cap h3{margin:0; font-size:15px; font-weight:700; display:flex; gap:8px; justify-content:center; align-items:center}
+.col .cap .badge{font-family:var(--font-mono); font-size:11px; font-weight:700; color:#fff;
+  background:var(--accent); width:22px; height:22px; border-radius:7px; display:grid; place-items:center}
+.col .cap p{margin:2px 0 0; font-size:12.5px; color:var(--text-muted); line-height:1.5}
+.sectionhead{display:flex; flex-direction:column; gap:6px; max-width:920px; margin:0 auto; text-align:center}
+.sectionhead h2{margin:0; font-size:clamp(20px,3vw,26px); letter-spacing:-.02em; text-wrap:balance}
+.sectionhead p{margin:0; color:var(--text-muted); font-size:14px; text-wrap:pretty}
+
+/* settings (layout-vars) slide-in */
+.scrim{position:fixed; inset:0; background:rgba(20,18,12,.42); opacity:0; pointer-events:none;
+  transition:.25s; z-index:40}
+.scrim.on{opacity:1; pointer-events:auto}
+.settings{position:fixed; top:0; right:0; height:100%; width:min(360px,90vw); z-index:50;
+  background:var(--surface); border-left:1px solid var(--border); box-shadow:var(--shadow-lg);
+  transform:translateX(100%); transition:.28s cubic-bezier(.4,0,.2,1); padding:24px; overflow:auto}
+.settings.on{transform:none}
+.settings h2{margin:0 0 4px; font-size:17px}
+.settings .row{margin-top:22px}
+.settings label{display:flex; justify-content:space-between; font-size:13px; font-weight:600; margin-bottom:8px}
+.settings label span{font-family:var(--font-mono); color:var(--accent); font-size:12px}
+.settings input[type=range]{width:100%; accent-color:var(--accent)}
+.settings .note{margin-top:24px; font-size:12px; color:var(--text-muted); line-height:1.55;
+  background:var(--surface-2); padding:12px; border-radius:var(--r-sm); border:1px solid var(--border-subtle)}
+
+.toast{position:fixed; left:50%; bottom:26px; transform:translateX(-50%) translateY(20px);
+  background:var(--text); color:var(--bg); padding:11px 18px; border-radius:var(--r-pill);
+  font-size:13px; font-weight:600; box-shadow:var(--shadow-lg); opacity:0; pointer-events:none;
+  transition:.25s; z-index:60}
+.toast.on{opacity:1; transform:translateX(-50%) translateY(0)}
+
+.pagefoot{padding:30px; text-align:center}
+.pagefoot .eyebrow{color:var(--text-subtle)}
+
+/* focus-mode overlay (Modalità Oggi a tutto schermo) */
+.focus{position:fixed; inset:0; z-index:70; background:
+   radial-gradient(1200px 600px at 50% -10%, var(--accent-soft), transparent 60%), var(--bg);
+   display:none; flex-direction:column; padding:clamp(20px,5vw,60px); overflow:auto}
+.focus.on{display:flex}
+.focus .fhead{display:flex; align-items:center; gap:14px; margin-bottom:30px}
+.focus .fhead h2{margin:0; font-size:clamp(24px,4vw,40px); letter-spacing:-.02em}
+.focus .fbig{max-width:680px; width:100%; margin:0 auto; display:flex; flex-direction:column; gap:14px}
+.focus .fgoal{display:flex; align-items:center; gap:16px; padding:18px 20px; background:var(--surface);
+  border:1px solid var(--border); border-radius:var(--r-lg); box-shadow:var(--shadow-md); font-size:19px; font-weight:600}
+.focus .fgoal.done{opacity:.5}
+
+/* ===================== [CSS-3] DEVICE FRAMES ========================== */
+.device{ zoom:var(--ui); }
+.phone{
+  width:384px; flex:0 0 auto; background:var(--surface-3); border:1px solid var(--border-strong);
+  border-radius:42px; padding:11px; box-shadow:var(--shadow-lg);
+}
+.phone .glass{background:var(--bg); border-radius:32px; overflow:hidden; position:relative;
+  height:734px; display:flex; flex-direction:column; border:1px solid var(--border)}
+.desktop{width:880px; max-width:92vw; flex:0 0 auto; background:var(--surface-3);
+  border:1px solid var(--border-strong); border-radius:16px; padding:10px; box-shadow:var(--shadow-lg)}
+.desktop .glass{background:var(--bg); border-radius:9px; overflow:hidden; height:600px;
+  display:flex; flex-direction:column; border:1px solid var(--border)}
+.winbar{display:flex; align-items:center; gap:8px; padding:11px 14px; background:var(--surface-2);
+  border-bottom:1px solid var(--border)}
+.winbar i{width:11px;height:11px;border-radius:50%;background:var(--border-strong); display:block}
+.winbar i:nth-child(1){background:#E0795E} .winbar i:nth-child(2){background:#E0A028} .winbar i:nth-child(3){background:#7FB069}
+.winbar .url{margin-left:10px; font-family:var(--font-mono); font-size:11px; color:var(--text-muted)}
+
+/* status bar telefono */
+.statusbar{display:flex; align-items:center; justify-content:space-between; padding:10px 20px 4px;
+  font-family:var(--font-mono); font-size:12px; font-weight:600; color:var(--text); flex:0 0 auto}
+.statusbar .dots{display:flex; gap:4px; align-items:center}
+.statusbar .dots b{width:5px;height:5px;border-radius:50%;background:var(--text); display:block}
+.statusbar .batt{width:22px;height:11px;border:1.5px solid var(--text); border-radius:3px; position:relative}
+.statusbar .batt::after{content:"";position:absolute;left:1.5px;top:1.5px;bottom:1.5px;width:13px;background:var(--ok);border-radius:1px}
+.statusbar .batt::before{content:"";position:absolute;right:-3px;top:3px;height:5px;width:2px;background:var(--text);border-radius:0 2px 2px 0}
+
+/* il "viewport" scrollabile dell'app dentro al frame */
+.vp{flex:1 1 auto; overflow:auto; position:relative}
+.vp::-webkit-scrollbar{width:0}
+
+/* ===================== [CSS-4] COMPONENTI =========================== */
+.screen{
+  font-size:calc(15px*var(--tx)); display:flex; flex-direction:column; min-height:100%;
+}
+.body{flex:1 1 auto; padding:calc(16px*var(--sp)) calc(15px*var(--sp)) calc(18px*var(--sp))}
+.scrollpad{padding-bottom:90px}
+
+/* header app interno */
+.apphead{display:flex; align-items:flex-end; justify-content:space-between; gap:10px;
+  padding:calc(14px*var(--sp)) calc(15px*var(--sp)) calc(8px*var(--sp))}
+.apphead .h{font-size:calc(22px*var(--tx)); font-weight:700; letter-spacing:-.02em; margin:0; line-height:1.15}
+.apphead .greet{font-size:calc(13px*var(--tx)); color:var(--text-muted)}
+
+/* nav */
+.bottomnav{position:absolute; left:0; right:0; bottom:0; height:74px; display:flex; align-items:center;
+  justify-content:space-around; background:color-mix(in srgb,var(--surface) 92%,transparent);
+  backdrop-filter:blur(10px); border-top:1px solid var(--border); z-index:5}
+.bottomnav a{display:flex; flex-direction:column; align-items:center; gap:3px; color:var(--text-subtle);
+  font-family:var(--font-mono); font-size:9px; letter-spacing:.06em; text-transform:uppercase; width:54px}
+.bottomnav a svg{width:23px;height:23px}
+.bottomnav a.on{color:var(--accent)}
+.bottomnav .fab{width:54px;height:54px; border-radius:50%; background:var(--accent); color:#fff;
+  display:grid; place-items:center; box-shadow:0 6px 18px color-mix(in srgb,var(--accent) 45%,transparent);
+  margin-top:-22px; border:4px solid var(--bg)}
+.bottomnav .fab svg{width:26px;height:26px}
+
+.toptabs{display:flex; gap:4px; padding:8px 14px 0; border-bottom:1px solid var(--border); flex:0 0 auto;
+  position:sticky; top:0; background:var(--bg); z-index:5}
+.toptabs a{flex:1; text-align:center; padding:11px 6px; border-radius:var(--r-sm) var(--r-sm) 0 0;
+  font-size:13.5px; font-weight:600; color:var(--text-muted); border-bottom:2.5px solid transparent;
+  display:flex; flex-direction:column; align-items:center; gap:4px}
+.toptabs a svg{width:19px;height:19px}
+.toptabs a.on{color:var(--accent); border-bottom-color:var(--accent)}
+
+.sidebar{width:88px; flex:0 0 auto; background:var(--surface-2); border-right:1px solid var(--border);
+  display:flex; flex-direction:column; align-items:center; gap:6px; padding:16px 8px}
+.sidebar .logo{width:40px;height:40px;border-radius:12px;background:var(--accent); color:#fff;
+  display:grid;place-items:center; font-weight:800; margin-bottom:12px; box-shadow:var(--shadow-md)}
+.sidebar a{width:100%; display:flex; flex-direction:column; align-items:center; gap:4px; padding:11px 4px;
+  border-radius:var(--r-sm); color:var(--text-muted); font-family:var(--font-mono); font-size:9px;
+  letter-spacing:.05em; text-transform:uppercase}
+.sidebar a svg{width:22px;height:22px}
+.sidebar a.on{background:var(--surface); color:var(--accent); box-shadow:var(--shadow-sm)}
+
+/* card / check / chip */
+.card{background:var(--surface); border:1px solid var(--border); border-radius:calc(var(--r-md)*var(--cr));
+  box-shadow:var(--shadow-sm); padding:calc(14px*var(--sp)); transition:.16s ease}
+.card.lift:hover{transform:translateY(-2px); border-color:var(--accent); box-shadow:var(--shadow-md)}
+
+.check{width:23px;height:23px;border-radius:7px;border:2px solid var(--border-strong); flex:0 0 auto;
+  display:grid; place-items:center; transition:.14s; background:var(--surface)}
+.check svg{width:14px;height:14px; stroke:#fff; opacity:0; transition:.14s}
+.check.on{background:var(--accent); border-color:var(--accent)}
+.check.on svg{opacity:1}
+.check.sm{width:19px;height:19px;border-radius:6px}
+
+.titledone{position:relative}
+.checkrow.done .titledone{color:var(--text-subtle)}
+.checkrow.done .titledone::after{content:"";position:absolute;left:0;right:0;top:50%;height:1.5px;
+  background:var(--text-subtle); opacity:.6}
+
+.pill{display:inline-flex; align-items:center; gap:5px; font-family:var(--font-mono); font-size:11px;
+  font-weight:600; padding:3px 9px; border-radius:var(--r-pill); background:var(--surface-2);
+  color:var(--text-muted); border:1px solid var(--border-subtle)}
+.pill.ok{background:var(--ok-bg); color:var(--ok); border-color:transparent}
+.pill.accent{background:var(--accent-soft); color:var(--accent); border-color:transparent}
+
+.chip{display:inline-flex; align-items:center; gap:6px; font-size:12px; font-weight:600; padding:5px 11px;
+  border-radius:var(--r-pill); background:var(--surface-2); border:1px solid var(--border); color:var(--text-muted)}
+.chip.on{background:var(--accent); color:#fff; border-color:var(--accent)}
+.chip .dot{width:8px;height:8px;border-radius:50%}
+.tag{font-family:var(--font-mono); font-size:10px; letter-spacing:.04em; color:var(--accent);
+  background:var(--accent-soft); padding:2px 7px; border-radius:6px}
+
+.progressbar{height:7px; border-radius:99px; background:var(--surface-3); overflow:hidden}
+.progressbar i{display:block; height:100%; background:linear-gradient(90deg,var(--accent),var(--accent-2)); border-radius:99px}
+
+.stat{display:flex; flex-direction:column; gap:3px}
+.stat .v{font-size:calc(25px*var(--tx)); font-weight:800; letter-spacing:-.02em; line-height:1}
+.stat .v small{font-size:14px; font-weight:600; color:var(--text-muted)}
+.stat .k{font-family:var(--font-mono); font-size:9.5px; letter-spacing:.12em; text-transform:uppercase; color:var(--text-muted)}
+
+.amountbig{font-family:var(--font-mono); font-weight:700; letter-spacing:-.01em}
+.keypad{display:grid; grid-template-columns:repeat(3,1fr); gap:8px}
+.keypad button{padding:14px 0; font-size:19px; font-weight:600; background:var(--surface); border:1px solid var(--border);
+  border-radius:var(--r-sm); font-family:var(--font-mono)}
+.keypad button:active{background:var(--surface-2)}
+.btn{display:inline-flex; align-items:center; justify-content:center; gap:8px; padding:13px 18px;
+  border:0; border-radius:var(--r-md); background:var(--accent); color:#fff; font-weight:700; font-size:15px;
+  box-shadow:var(--shadow-sm); width:100%}
+.btn.ghost{background:var(--surface); color:var(--text); border:1px solid var(--border)}
+.field{width:100%; padding:12px 13px; border:1px solid var(--border); border-radius:var(--r-sm);
+  background:var(--surface); color:var(--text); font-family:inherit; font-size:14px}
+.field::placeholder{color:var(--text-subtle)}
+textarea.field{resize:none; line-height:1.6}
+
+.svgwrap{display:grid; place-items:center}
+.legend{display:flex; flex-direction:column; gap:8px}
+.legend .li{display:flex; align-items:center; gap:9px; font-size:13px}
+.legend .li .sw{width:11px;height:11px;border-radius:3px; flex:0 0 auto}
+.legend .li b{margin-left:auto; font-family:var(--font-mono); font-size:12px}
+
+/* =================== [CSS-5] SKIN PER DIREZIONE ===================== */
+
+/* ---- DIR A · COMPATTA / densa / list-first ---- */
+.dir-A{ --cr:.7; }
+.dir-A .body{padding:calc(12px*var(--sp)) calc(13px*var(--sp))}
+.dir-A .weekstrip{display:flex; gap:8px; overflow:auto; padding:2px 0 10px; margin-bottom:4px}
+.dir-A .weekstrip::-webkit-scrollbar{height:0}
+.dir-A .weekchip{flex:0 0 auto; background:var(--surface); border:1px solid var(--border); border-radius:var(--r-sm);
+  padding:8px 11px; min-width:118px}
+.dir-A .weekchip .t{font-size:12px; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
+.dir-A .glist{display:flex; flex-direction:column}
+.dir-A .grow{display:flex; align-items:center; gap:11px; padding:11px 4px; border-bottom:1px solid var(--border-subtle)}
+.dir-A .grow .t{font-weight:600; font-size:14.5px; flex:1 1 auto}
+.dir-A .subrow{display:flex; align-items:center; gap:10px; padding:8px 4px 8px 34px; border-bottom:1px solid var(--border-subtle)}
+.dir-A .subrow .t{font-size:13px; color:var(--text-muted); flex:1 1 auto}
+.dir-A .daybar{display:flex; align-items:center; gap:11px; margin-bottom:12px}
+.dir-A .daybar .progressbar{flex:1 1 auto}
+.dir-A .tiles2{display:grid; grid-template-columns:1fr 1fr; gap:9px}
+.dir-A .tiles2 .card{padding:12px}
+
+/* ---- DIR B · ARIOSA / card / generosa ---- */
+.dir-B{ --sp:1.18; --cr:1.25; }
+.dir-B .body{padding:calc(16px*var(--sp)) calc(16px*var(--sp))}
+.dir-B .goalcard{display:flex; flex-direction:column; gap:12px; margin-bottom:13px}
+.dir-B .goalcard .top{display:flex; align-items:center; gap:13px}
+.dir-B .goalcard .top .t{font-size:16px; font-weight:700; flex:1 1 auto}
+.dir-B .subs{display:flex; flex-direction:column; gap:9px; padding-left:4px; border-left:2px solid var(--border); margin-left:8px}
+.dir-B .subrow{display:flex; align-items:center; gap:10px; padding-left:12px}
+.dir-B .subrow .t{font-size:13.5px; color:var(--text-muted)}
+.dir-B .secttitle{font-size:13px; font-weight:700; margin:22px 4px 12px; display:flex; align-items:center; gap:8px}
+.dir-B .secttitle .eyebrow{margin-left:auto}
+.dir-B .herohome{background:linear-gradient(135deg,var(--accent-soft),var(--surface)); border:1px solid var(--border)}
+
+/* ---- DIR C · GRIGLIA / dashboard-centrica / command-center ---- */
+.dir-C{ --cr:1; }
+.dir-C .hero{background:linear-gradient(140deg,color-mix(in srgb,var(--accent) 16%,var(--surface)),var(--surface));
+  border:1px solid var(--border); border-radius:var(--r-lg); padding:16px; display:flex; align-items:center; gap:16px; margin-bottom:14px}
+.dir-C .hero .ringwrap{flex:0 0 auto}
+.dir-C .hero .meta{flex:1 1 auto}
+.dir-C .grid{display:grid; grid-template-columns:1fr 1fr; gap:11px}
+.dir-C .grid .span2{grid-column:1/-1}
+.dir-C .gcardmini{display:flex; flex-direction:column; gap:9px}
+.dir-C .gcardmini .top{display:flex; align-items:center; gap:10px}
+.dir-C .gcardmini .top .t{font-weight:600; font-size:13.5px; line-height:1.25}
+.dir-C .kpi{display:grid; grid-template-columns:repeat(2,1fr); gap:11px}
+.dir-C .widget h4{margin:0 0 10px; font-size:12px; display:flex; align-items:center; gap:8px}
+.dir-C .widget h4 .eyebrow{margin-left:auto}
+.dir-C .focusbtn{display:inline-flex; align-items:center; gap:8px; margin-top:10px; padding:9px 14px;
+  background:var(--accent); color:#fff; border:0; border-radius:var(--r-pill); font-weight:700; font-size:13px}
+.dir-C .focusbtn svg{width:16px;height:16px}
+
+/* su frame desktop, le griglie respirano in più colonne */
+.desktop .dir-C .grid{grid-template-columns:repeat(3,1fr)}
+.desktop .dir-C .kpi{grid-template-columns:repeat(4,1fr)}
+.desktop .dir-B .body{max-width:680px; margin:0 auto}
+.desktop .dir-A .glist{columns: 2; column-gap:24px}
+
+/* sidebar layout solo desktop per C */
+.withside{display:flex; height:100%}
+.withside .vp{flex:1 1 auto}
+
+.weekheat{display:flex; gap:5px}
+.weekheat i{flex:1; height:30px; border-radius:5px; background:var(--accent); display:block}
+.heatlabels{display:flex; gap:5px; margin-top:5px}
+.heatlabels span{flex:1; text-align:center; font-family:var(--font-mono); font-size:9px; color:var(--text-subtle)}
+
+@media(max-width:520px){
+  .controls{top:65px}
+  .phone{width:340px}
+  .phone .glass{height:680px}
+}
+</style>
+</head>
+<body>
+
+<!-- ============================ APPBAR ============================ -->
+<header class="appbar">
+  <div class="brand">
+    <span class="eyebrow">Argo · Mockup Fase 1</span>
+    <h1>Obiettivi &amp; Note</h1>
+  </div>
+  <button class="iconbtn langbtn" id="langBtn" title="Lingua">IT</button>
+  <button class="iconbtn" id="themeBtn" title="Tema"></button>
+  <button class="iconbtn" id="setBtn" title="Layout"></button>
+</header>
+
+<!-- =========================== CONTROLS =========================== -->
+<div class="controls">
+  <div class="cgroup">
+    <span class="eyebrow" data-i="modo">Modalità vista</span>
+    <div class="seg" id="modeSeg">
+      <button data-mode="compare" class="on" data-i="confronta">Confronta direzioni</button>
+      <button data-mode="explore" data-i="esplora">Esplora una direzione</button>
+    </div>
+  </div>
+
+  <div class="cgroup" id="screenWrap">
+    <span class="eyebrow" data-i="schermata">Schermata</span>
+    <div class="seg" id="screenSeg">
+      <button data-screen="home" class="on" data-i="home">Home</button>
+      <button data-screen="dash" data-i="dash">Dashboard</button>
+      <button data-screen="exp" data-i="exp">Spesa</button>
+      <button data-screen="note" data-i="note">Nota</button>
+    </div>
+  </div>
+
+  <div class="cgroup" id="dirWrap" style="display:none">
+    <span class="eyebrow" data-i="direzione">Direzione</span>
+    <div class="seg accent" id="dirSeg">
+      <button data-dir="A" class="on">A · Compatta</button>
+      <button data-dir="B">B · Ariosa</button>
+      <button data-dir="C">C · Griglia</button>
+    </div>
+  </div>
+
+  <div class="cgroup">
+    <span class="eyebrow" data-i="dispositivo">Dispositivo</span>
+    <div class="seg" id="devSeg">
+      <button data-dev="phone" class="on" data-i="mobile">Mobile</button>
+      <button data-dev="desktop" data-i="desktop">Desktop</button>
+    </div>
+  </div>
+
+  <span class="hint" id="hint"></span>
+</div>
+
+<!-- ============================ STAGE ============================ -->
+<main class="stage" id="stage"></main>
+
+<footer class="pagefoot">
+  <span class="eyebrow">Obiettivi &amp; Note — Mockup statico · nessun dato reale · nessun backend</span>
+</footer>
+
+<!-- ===================== SETTINGS (layout-vars) ===================== -->
+<div class="scrim" id="scrim"></div>
+<aside class="settings" id="settings">
+  <span class="eyebrow">Layout dinamico</span>
+  <h2 data-i="layouttitle">Regola l'interfaccia</h2>
+  <p style="font-size:13px;color:var(--text-muted);margin:6px 0 0" data-i="layoutsub">Gli slider scrivono CSS-vars live (come nell'app finale).</p>
+  <div class="row"><label data-i="scala">Scala UI <span id="uiVal">100%</span></label><input type="range" id="uiR" min="80" max="120" value="100"></div>
+  <div class="row"><label data-i="spazio">Spaziatura <span id="spVal">100%</span></label><input type="range" id="spR" min="80" max="140" value="100"></div>
+  <div class="row"><label data-i="raggio">Raggio angoli <span id="crVal">100%</span></label><input type="range" id="crR" min="0" max="160" value="100"></div>
+  <div class="row"><label data-i="testo">Dimensione testo <span id="txVal">100%</span></label><input type="range" id="txR" min="88" max="120" value="100"></div>
+  <div class="note" data-i="layoutnote">Nel core dell'app questi valori vivono in localStorage granulare (una chiave per preferenza) e sono per-dispositivo.</div>
+</aside>
+
+<div class="toast" id="toast"></div>
+<div class="focus" id="focus"></div>
+
+<script>
+/* ============================ [JS-1] UTILS ============================ */
+const $ = (s,r=document)=>r.querySelector(s);
+const $$ = (s,r=document)=>[...r.querySelectorAll(s)];
+const slug = s => s.normalize("NFD").replace(/[̀-ͯ]/g,"").toLowerCase().replace(/[^a-z0-9]+/g,"-").replace(/^-|-$/g,"");
+
+/* i18n IT/EN inline (default IT) — chrome della gallery */
+const I18N = {
+  it:{modo:"Modalità vista",confronta:"Confronta direzioni",esplora:"Esplora una direzione",schermata:"Schermata",
+      home:"Home",dash:"Dashboard",exp:"Spesa",note:"Nota",direzione:"Direzione",dispositivo:"Dispositivo",
+      mobile:"Mobile",desktop:"Desktop",layouttitle:"Regola l'interfaccia",
+      layoutsub:"Gli slider scrivono CSS-vars live (come nell'app finale).",scala:"Scala UI",spazio:"Spaziatura",
+      raggio:"Raggio angoli",testo:"Dimensione testo",
+      layoutnote:"Nel core dell'app questi valori vivono in localStorage granulare (una chiave per preferenza) e sono per-dispositivo.",
+      hintCompare:"↔ Stessa schermata · 3 direzioni a confronto",hintExplore:"▶ Una direzione · le 4 schermate in sequenza"},
+  en:{modo:"View mode",confronta:"Compare directions",esplora:"Explore one direction",schermata:"Screen",
+      home:"Home",dash:"Dashboard",exp:"Expense",note:"Note",direzione:"Direction",dispositivo:"Device",
+      mobile:"Mobile",desktop:"Desktop",layouttitle:"Tune the interface",
+      layoutsub:"Sliders write live CSS-vars (like the final app).",scala:"UI scale",spazio:"Spacing",
+      raggio:"Corner radius",testo:"Text size",
+      layoutnote:"In the app core these values live in granular localStorage (one key per preference), per-device.",
+      hintCompare:"↔ Same screen · 3 directions side by side",hintExplore:"▶ One direction · the 4 screens in sequence"}
+};
+
+/* icone SVG inline (stroke currentColor) */
+const P = {
+  home:"M3 11l9-7 9 7M5 10v9a1 1 0 0 0 1 1h3v-6h6v6h3a1 1 0 0 0 1-1v-9",
+  dash:"M3 21h18M6 21V9M12 21V4M18 21v-7",
+  exp:"M3 7h15a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h11M16 13h.5",
+  note:"M6 3h8l5 5v13H6zM14 3v5h5M9 12h6M9 16h4",
+  plus:"M12 5v14M5 12h14", check:"M5 12l4 4L19 7",
+  flame:"M12 21a6 6 0 0 1-6-6c0-4 4-7 4-11 0 2 2 3 3 4 1.5 1.5 3 3.5 3 7a4 4 0 0 1-4 6z",
+  chevR:"M9 6l6 6-6 6", chevD:"M6 9l6 6 6-6",
+  sun:"M12 3V1M12 23v-2M4.2 4.2 2.8 2.8M21.2 21.2 19.8 19.8M3 12H1M23 12h-2M4.2 19.8 2.8 21.2M21.2 2.8 19.8 4.2",
+  moon:"M21 12.8A8 8 0 1 1 11.2 3 6.3 6.3 0 0 0 21 12.8z",
+  set:"M5 8h9M18 8h1M5 16h1M10 16h9M14 6v4M8 14v4",
+  globe:"M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18M3.5 9h17M3.5 15h17M12 3c2.6 2.5 2.6 15.5 0 18M12 3c-2.6 2.5-2.6 15.5 0 18",
+  search:"M11 4a7 7 0 1 0 0 14 7 7 0 0 0 0-14zM20 20l-3.5-3.5",
+  tag:"M3 12l8.5-8.5a2 2 0 0 1 2.8 0l5.2 5.2a2 2 0 0 1 0 2.8L11 20z M7.5 8h.01",
+  cal:"M5 5h14v15H5zM5 9h14M9 3v4M15 3v4",
+  cam:"M4 8h3l1.5-2h7L17 8h3v12H4zM12 17a4 4 0 1 0 0-8 4 4 0 0 0 0 8",
+  star:"M12 3l2.6 5.5 6 .8-4.4 4.2 1.1 6L12 16.8 6.7 19.5l1.1-6L3.4 9.3l6-.8z",
+  expand:"M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5",
+  bell:"M6 9a6 6 0 0 1 12 0c0 5 2 6 2 6H4s2-1 2-6M10 20a2 2 0 0 0 4 0"
+};
+const ic = (n,cls='')=>`<svg class="${cls}" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="${P[n]}"/></svg>`;
+
+/* helper grafici --------------------------------------------------- */
+function ring(pct,size=72,sw=9,label=''){
+  const r=(size-sw)/2, c=2*Math.PI*r, off=c*(1-pct/100);
+  return `<div class="ringwrap svgwrap" style="position:relative;width:${size}px;height:${size}px">
+    <svg width="${size}" height="${size}" style="transform:rotate(-90deg)">
+      <circle cx="${size/2}" cy="${size/2}" r="${r}" fill="none" stroke="var(--surface-3)" stroke-width="${sw}"/>
+      <circle cx="${size/2}" cy="${size/2}" r="${r}" fill="none" stroke="var(--accent)" stroke-width="${sw}"
+        stroke-linecap="round" stroke-dasharray="${c}" stroke-dashoffset="${off}"/>
+    </svg>
+    <div style="position:absolute;inset:0;display:grid;place-items:center;text-align:center">
+      <div><div style="font-weight:800;font-size:${size*0.26}px;line-height:1">${Math.round(pct)}<small style="font-size:.5em">%</small></div>
+      ${label?`<div class="eyebrow" style="font-size:8px">${label}</div>`:''}</div>
+    </div></div>`;
+}
+function donut(segs,size=140){
+  const r=52, c=2*Math.PI*r; let acc=0;
+  const tot=segs.reduce((a,s)=>a+s.value,0)||1;
+  const circles=segs.map(s=>{
+    const f=s.value/tot, dash=f*c, rot=-90+acc*360; acc+=f;
+    return `<circle cx="70" cy="70" r="${r}" fill="none" stroke="${s.color}" stroke-width="20"
+      stroke-dasharray="${dash} ${c}" transform="rotate(${rot} 70 70)"/>`;
+  }).join('');
+  return `<svg viewBox="0 0 140 140" width="${size}" height="${size}">
+    <circle cx="70" cy="70" r="${r}" fill="none" stroke="var(--surface-3)" stroke-width="20"/>${circles}
+    <text x="70" y="66" text-anchor="middle" font-family="var(--font-mono)" font-size="9" fill="var(--text-muted)" letter-spacing="1">MESE</text>
+    <text x="70" y="84" text-anchor="middle" font-weight="800" font-size="19" fill="var(--text)">€${Math.round(tot)}</text>
+  </svg>`;
+}
+function bars(items,h=92){
+  const max=Math.max(...items.map(i=>i.value))||1;
+  return `<svg viewBox="0 0 ${items.length*30} ${h+18}" width="100%" height="${h+18}" preserveAspectRatio="none" style="overflow:visible">
+    ${items.map((it,i)=>{const bh=Math.max(4,it.value/max*h);const x=i*30+7;
+      return `<rect x="${x}" y="${h-bh}" width="16" height="${bh}" rx="4" fill="${it.color||'var(--accent)'}" opacity="${it.dim?.45:1}"/>
+        <text x="${x+8}" y="${h+13}" text-anchor="middle" font-family="var(--font-mono)" font-size="8" fill="var(--text-subtle)">${it.label}</text>`;}).join('')}
+  </svg>`;
+}
+function spark(vals,w=120,h=40){
+  const max=Math.max(...vals),min=Math.min(...vals),rng=(max-min)||1;
+  const pts=vals.map((v,i)=>`${i/(vals.length-1)*w},${h-((v-min)/rng)*(h-6)-3}`).join(' ');
+  return `<svg viewBox="0 0 ${w} ${h}" width="${w}" height="${h}"><polyline points="${pts}" fill="none" stroke="var(--accent)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+}
+function weekHeat(vals){
+  const d=['L','M','M','G','V','S','D'];
+  return `<div class="weekheat">${vals.map(v=>`<i style="opacity:${0.18+v*0.82}"></i>`).join('')}</div>
+    <div class="heatlabels">${d.map(x=>`<span>${x}</span>`).join('')}</div>`;
+}
+
+/* ============================ [JS-2] DATA ============================ */
+const DATA = {
+  today:{label:"Martedì 3 Giugno", dDone:2, dTotal:5},
+  daily:[
+    {t:"Allenamento mattutino", done:false, subs:[{t:"Riscaldamento",d:true},{t:"Forza",d:false},{t:"Stretching",d:true}]},
+    {t:"Finire report Q2", done:false, subs:[{t:"Bozza",d:true},{t:"Revisione",d:false},{t:"Invio",d:false}]},
+    {t:"Studio inglese · 30 min", done:true, subs:[{t:"Vocaboli",d:true},{t:"Ascolto",d:true}]},
+    {t:"Chiamare il commercialista", done:false, subs:[]},
+    {t:"Lettura · 20 pagine", done:true, subs:[]}
+  ],
+  weekly:[
+    {t:"Palestra 4×", done:2, total:4},
+    {t:'Finire "Dune"', done:0, total:1, prog:.6},
+    {t:"Pianificare viaggio", done:1, total:3},
+    {t:"Spese sotto 400€", track:true}
+  ],
+  notes:[
+    {t:"Idee regalo compleanno Sara", b:"Cuffie · libro di cucina · weekend terme…", tags:["personale","idee"], w:"2h fa"},
+    {t:"Setup Firebase", b:"Firestore offline + rules su UID. Listener mirati, niente re-read.", tags:["dev","progetto"], w:"ieri"},
+    {t:"Lista spesa", b:"Pane, uova, caffè, detersivo, frutta", tags:["casa"], w:"ieri"},
+    {t:"Riflessione settimana", b:"Bene l'inglese. Da migliorare: sonno.", tags:["diario"], w:"2g fa"}
+  ],
+  expenses:[
+    {a:12.5, c:"Cibo", n:"Pranzo bar", w:"Oggi"},
+    {a:45.0, c:"Spesa", n:"Supermercato", w:"Oggi"},
+    {a:9.9, c:"Trasporti", n:"Benzina", w:"Ieri"},
+    {a:60.0, c:"Casa", n:"Bolletta luce", w:"2g fa"},
+    {a:25.0, c:"Svago", n:"Cinema", w:"3g fa"}
+  ],
+  cats:[
+    {name:"Spesa", v:"--cat-spesa", total:120},{name:"Cibo", v:"--cat-cibo", total:78},
+    {name:"Trasporti", v:"--cat-trasporti", total:45},{name:"Casa", v:"--cat-casa", total:60},
+    {name:"Svago", v:"--cat-svago", total:25},{name:"Varie", v:"--cat-varie", total:14}
+  ],
+  month:{spent:312.4, budget:400},
+  weekComp:[.6,.8,.4,1,.7,.2,.5],
+  streak:5, emptyDays:3
+};
+const catColor = name => `var(${(DATA.cats.find(c=>c.name===name)||{v:'--cat-varie'}).v})`;
+const eur = n => "€"+n.toFixed(2).replace('.',',');
+
+/* ====================== [JS-3] RENDER SCHERMATE ====================== */
+const SCREENS=[{k:'home',i:'home'},{k:'dash',i:'dash'},{k:'exp',i:'exp'},{k:'note',i:'note'}];
+
+function statusbar(){
+  return `<div class="statusbar"><span>9:41</span>
+    <div class="dots"><b></b><b></b><b></b><span style="margin-left:6px">5G</span><span class="batt"></span></div></div>`;
+}
+function navBottom(active){
+  const it=[['home','Home'],['dash','Storico'],['exp','Spese'],['note','Note']];
+  return `<nav class="bottomnav">
+    ${ic_nav(it[0],active)}${ic_nav(it[1],active)}
+    <a class="fabwrap"><span class="fab">${ic('plus')}</span></a>
+    ${ic_nav(it[2],active)}${ic_nav(it[3],active)}</nav>`;
+}
+const ic_nav=([k,l],active)=>`<a class="${active===k?'on':''}">${ic(k)}<span>${l}</span></a>`;
+function navTop(active){
+  const it=[['home','Home'],['dash','Storico'],['exp','Spese'],['note','Note']];
+  return `<nav class="toptabs">${it.map(([k,l])=>`<a class="${active===k?'on':''}">${ic(k)}<span>${l}</span></a>`).join('')}</nav>`;
+}
+function navSide(active){
+  const it=[['home','Home'],['dash','Storico'],['exp','Spese'],['note','Note']];
+  return `<nav class="sidebar"><div class="logo">O</div>
+    ${it.map(([k,l])=>`<a class="${active===k?'on':''}">${ic(k)}<span>${l}</span></a>`).join('')}</nav>`;
+}
+
+const checkbox=(on,sm)=>`<span class="check ${on?'on':''} ${sm?'sm':''}">${ic('check')}</span>`;
+
+/* ---------- HOME ---------- */
+function homeA(){
+  const d=DATA;
+  return `<div class="body scrollpad">
+    <div class="apphead" style="padding-left:0;padding-right:0">
+      <div><div class="eyebrow">${d.today.label}</div><h2 class="h">Oggi</h2></div>
+      <span class="pill accent">${d.today.dDone}/${d.today.dTotal}</span>
+    </div>
+    <div class="daybar"><div class="progressbar" style="flex:1"><i style="width:${d.today.dDone/d.today.dTotal*100}%"></i></div></div>
+    <div class="weekstrip">
+      ${d.weekly.map(w=>`<div class="weekchip"><div class="eyebrow" style="font-size:8px">Settimana</div>
+        <div class="t">${w.t}</div><div class="progressbar" style="margin-top:6px"><i style="width:${(w.track?.78:(w.prog??w.done/(w.total||1)))*100}%"></i></div></div>`).join('')}
+    </div>
+    <div class="eyebrow" style="margin:6px 0 2px">Obiettivi del giorno</div>
+    <div class="glist">
+      ${d.daily.map((g,gi)=>{
+        const dn=g.subs.length?g.subs.filter(s=>s.d).length:(g.done?1:0), tt=g.subs.length||1;
+        return `<div class="checkrow ${g.done?'done':''}"><div class="grow">${checkbox(g.done)}
+          <span class="t titledone">${g.t}</span>
+          ${g.subs.length?`<span class="pill">${dn}/${g.subs.length}</span>`:''}
+          ${g.subs.length?ic('chevD','chev'):''}</div>
+          ${gi===0?g.subs.map(s=>`<div class="checkrow ${s.d?'done':''}"><div class="subrow">${checkbox(s.d,true)}<span class="t titledone">${s.t}</span></div></div>`).join(''):''}
+        </div>`;}).join('')}
+    </div>
+    <button class="btn ghost" style="margin-top:14px">${ic('plus')} Aggiungi obiettivo</button>
+  </div>`;
+}
+function homeB(){
+  const d=DATA, pct=d.today.dDone/d.today.dTotal*100;
+  return `<div class="body scrollpad">
+    <div class="card lift herohome" style="display:flex;align-items:center;gap:16px;margin-bottom:14px">
+      ${ring(pct,84,10,"Oggi")}
+      <div><div class="eyebrow">${d.today.label}</div>
+        <div style="font-size:20px;font-weight:700;letter-spacing:-.02em">Ciao Marco 👋</div>
+        <div style="color:var(--text-muted);font-size:13px">${d.today.dDone} di ${d.today.dTotal} obiettivi completati</div></div>
+    </div>
+    <div class="secttitle">Obiettivi di oggi <span class="eyebrow">${d.daily.length} item</span></div>
+    ${d.daily.map((g,gi)=>{
+      const dn=g.subs.filter(s=>s.d).length;
+      return `<div class="card lift goalcard checkrow ${g.done?'done':''}">
+        <div class="top">${checkbox(g.done)}<span class="t titledone">${g.t}</span>
+        ${g.subs.length?`<span class="pill ${dn===g.subs.length?'ok':''}">${dn}/${g.subs.length}</span>`:`<span class="pill ${g.done?'ok':''}">${g.done?'fatto':'da fare'}</span>`}</div>
+        ${g.subs.length?`<div class="subs">${g.subs.map(s=>`<div class="checkrow ${s.d?'done':''}"><div class="subrow">${checkbox(s.d,true)}<span class="t titledone">${s.t}</span></div></div>`).join('')}</div>`:''}
+      </div>`;}).join('')}
+    <div class="secttitle">Questa settimana <span class="eyebrow">obiettivi</span></div>
+    ${d.weekly.map(w=>`<div class="card lift" style="display:flex;align-items:center;gap:12px;margin-bottom:11px">
+      <div style="flex:1"><div style="font-weight:600">${w.t}</div>
+      <div class="progressbar" style="margin-top:8px"><i style="width:${(w.track?.78:(w.prog??w.done/(w.total||1)))*100}%"></i></div></div>
+      <span class="pill">${w.track?'78%':(w.total?w.done+'/'+w.total:Math.round((w.prog||0)*100)+'%')}</span></div>`).join('')}
+  </div>`;
+}
+function homeC(){
+  const d=DATA, pct=d.today.dDone/d.today.dTotal*100;
+  return `<div class="body scrollpad">
+    <div class="hero">
+      ${ring(pct,76,9)}
+      <div class="meta"><div class="eyebrow">${d.today.label}</div>
+        <div style="font-size:18px;font-weight:700">${d.today.dDone}/${d.today.dTotal} completati</div>
+        <div style="display:flex;gap:8px;align-items:center;margin-top:4px;color:var(--accent-2);font-weight:600;font-size:13px">${ic('flame','flame')} ${d.streak} giorni di fila</div>
+        <button class="focusbtn" data-focus="1">${ic('expand')} Modalità Oggi</button>
+      </div>
+    </div>
+    <div class="eyebrow" style="margin:4px 0 9px">Obiettivi del giorno</div>
+    <div class="grid">
+      ${d.daily.map(g=>{const dn=g.subs.filter(s=>s.d).length;
+        return `<div class="card lift gcardmini checkrow ${g.done?'done':''} ${g.subs.length?'':'span2'}">
+          <div class="top">${checkbox(g.done)}<span class="t titledone">${g.t}</span></div>
+          ${g.subs.length?`<div class="progressbar"><i style="width:${dn/g.subs.length*100}%"></i></div>
+            <div class="eyebrow" style="font-size:8px">${dn}/${g.subs.length} sotto-task</div>`:''}
+        </div>`;}).join('')}
+      <div class="card span2" style="background:var(--surface-2)">
+        <div class="eyebrow" style="margin-bottom:8px">Settimana corrente</div>
+        ${d.weekly.map(w=>`<div style="display:flex;align-items:center;gap:10px;margin:7px 0">
+          <span style="flex:1;font-size:13px;font-weight:600">${w.t}</span>
+          <div class="progressbar" style="width:64px"><i style="width:${(w.track?.78:(w.prog??w.done/(w.total||1)))*100}%"></i></div></div>`).join('')}
+      </div>
+    </div>
+  </div>`;
+}
+
+/* ---------- DASHBOARD ---------- */
+function dashA(){
+  const d=DATA, segs=d.cats.map(c=>({value:c.total,color:`var(${c.v})`}));
+  return `<div class="body scrollpad">
+    <div class="apphead" style="padding:0 0 10px"><h2 class="h">Storico</h2><span class="eyebrow">Giugno</span></div>
+    <div class="tiles2">
+      <div class="card"><div class="stat"><div class="k">Oggi</div><div class="v">40<small>%</small></div></div></div>
+      <div class="card"><div class="stat"><div class="k">Settimana</div><div class="v">68<small>%</small></div></div></div>
+      <div class="card"><div class="stat"><div class="k">Streak</div><div class="v" style="color:var(--accent-2)">${d.streak}<small> gg</small></div></div></div>
+      <div class="card"><div class="stat"><div class="k">Giorni vuoti</div><div class="v">${d.emptyDays}</div></div></div>
+    </div>
+    <div class="card" style="margin-top:9px">
+      <div class="eyebrow" style="margin-bottom:6px">Completamento · 7 giorni</div>
+      ${bars(d.weekComp.map((v,i)=>({value:v,label:['L','M','M','G','V','S','D'][i],color:'var(--accent)',dim:v<.5})))}
+    </div>
+    <div class="card" style="margin-top:9px;display:flex;gap:12px;align-items:center">
+      <div class="svgwrap">${donut(segs,120)}</div>
+      <div class="legend" style="flex:1">${d.cats.map(c=>`<div class="li"><span class="sw" style="background:var(${c.v})"></span>${c.name}<b>${eur(c.total)}</b></div>`).join('')}</div>
+    </div>
+    <div class="card" style="margin-top:9px;display:flex;align-items:center;gap:12px">
+      <div class="stat"><div class="k">Spese mese</div><div class="v">${eur(d.month.spent)}</div></div>
+      <div style="flex:1"><div class="progressbar"><i style="width:${d.month.spent/d.month.budget*100}%;background:${d.month.spent>d.month.budget?'var(--bad)':'linear-gradient(90deg,var(--accent),var(--accent-2))'}"></i></div>
+      <div class="eyebrow" style="margin-top:5px">Budget ${eur(d.month.budget)}</div></div>
+    </div>
+  </div>`;
+}
+function dashB(){
+  const d=DATA, segs=d.cats.map(c=>({value:c.total,color:`var(${c.v})`}));
+  return `<div class="body scrollpad">
+    <div class="card lift" style="display:flex;align-items:center;gap:18px;margin-bottom:13px">
+      ${ring(68,96,11,"Settimana")}
+      <div><div class="eyebrow">Completamento</div>
+        <div style="font-size:15px;font-weight:600;margin-top:4px">Buona costanza 🎯</div>
+        <div style="color:var(--text-muted);font-size:13px">Oggi 40% · media 7gg 60%</div></div>
+    </div>
+    <div class="card lift" style="display:flex;align-items:center;gap:16px;margin-bottom:13px">
+      <div style="font-size:40px">${'🔥'}</div>
+      <div style="flex:1"><div class="eyebrow">Streak</div><div style="font-size:22px;font-weight:800">${d.streak} giorni di fila</div>
+        <div style="color:var(--text-muted);font-size:13px">${d.emptyDays} giorni vuoti questo mese</div></div>
+      ${spark([1,2,3,3,4,5],90,40)}
+    </div>
+    <div class="card lift" style="margin-bottom:13px">
+      <div class="secttitle" style="margin:0 0 12px">Andamento settimanale</div>
+      ${bars(d.weekComp.map((v,i)=>({value:v,label:['L','M','M','G','V','S','D'][i]})),104)}
+    </div>
+    <div class="card lift">
+      <div class="secttitle" style="margin:0 0 12px">Spese per categoria <span class="eyebrow">${eur(d.month.spent)}</span></div>
+      <div style="display:flex;gap:18px;align-items:center">
+        <div class="svgwrap">${donut(segs,140)}</div>
+        <div class="legend" style="flex:1">${d.cats.map(c=>`<div class="li"><span class="sw" style="background:var(${c.v})"></span>${c.name}<b>${eur(c.total)}</b></div>`).join('')}</div>
+      </div>
+    </div>
+  </div>`;
+}
+function dashC(){
+  const d=DATA, segs=d.cats.map(c=>({value:c.total,color:`var(${c.v})`}));
+  return `<div class="body scrollpad">
+    <div class="apphead" style="padding:0 0 12px"><h2 class="h">Storico</h2><span class="eyebrow">Command center</span></div>
+    <div class="kpi" style="margin-bottom:11px">
+      <div class="card"><div class="stat"><div class="k">Oggi</div><div class="v">40<small>%</small></div></div></div>
+      <div class="card"><div class="stat"><div class="k">Settimana</div><div class="v">68<small>%</small></div></div></div>
+      <div class="card"><div class="stat"><div class="k">Streak</div><div class="v" style="color:var(--accent-2)">${d.streak}</div></div></div>
+      <div class="card"><div class="stat"><div class="k">Spese mese</div><div class="v" style="font-size:19px">${eur(d.month.spent)}</div></div></div>
+    </div>
+    <div class="grid">
+      <div class="card widget span2"><h4>${ic('dash')} Completamento <span class="eyebrow">7 giorni</span></h4>
+        ${bars(d.weekComp.map((v,i)=>({value:v,label:['L','M','M','G','V','S','D'][i],dim:v<.5})),96)}</div>
+      <div class="card widget"><h4>${ic('exp')} Per categoria</h4><div class="svgwrap">${donut(segs,118)}</div></div>
+      <div class="card widget"><h4>${ic('flame')} Attività <span class="eyebrow">settimana</span></h4>${weekHeat(d.weekComp)}
+        <div class="eyebrow" style="margin-top:10px">${d.emptyDays} giorni vuoti nel mese</div></div>
+      <div class="card widget span2"><h4>${ic('exp')} Budget mensile</h4>
+        <div style="display:flex;align-items:center;gap:12px">
+          <div class="stat"><div class="v">${eur(d.month.spent)}</div><div class="k">su ${eur(d.month.budget)}</div></div>
+          <div style="flex:1"><div class="progressbar" style="height:10px"><i style="width:${d.month.spent/d.month.budget*100}%"></i></div></div></div>
+      </div>
+    </div>
+  </div>`;
+}
+
+/* ---------- SPESA (cattura rapida) ---------- */
+function expA(){
+  return `<div class="body scrollpad">
+    <div class="apphead" style="padding:0 0 6px"><h2 class="h">Nuova spesa</h2><span class="eyebrow">3 tap</span></div>
+    <div class="card" style="text-align:center;padding:18px 14px">
+      <div class="eyebrow">Importo</div>
+      <div class="amountbig" style="font-size:46px;margin:4px 0">€ 12,50</div>
+    </div>
+    <div class="eyebrow" style="margin:14px 0 7px">Categoria</div>
+    <div style="display:flex;flex-wrap:wrap;gap:7px">
+      ${DATA.cats.map((c,i)=>`<span class="chip ${i===1?'on':''}"><span class="dot" style="background:var(${c.v})"></span>${c.name}</span>`).join('')}
+    </div>
+    <div style="display:flex;gap:8px;margin:14px 0">
+      <span class="chip"><span>${ic('cal')}</span>&nbsp;Oggi</span>
+      <input class="field" placeholder="Nota (facoltativa)" value="Pranzo bar" style="flex:1">
+    </div>
+    <div class="keypad">${['1','2','3','4','5','6','7','8','9',',','0','⌫'].map(k=>`<button>${k}</button>`).join('')}</div>
+    <button class="btn" style="margin-top:12px">${ic('check')} Salva spesa</button>
+    <div class="eyebrow" style="margin:18px 0 6px">Recenti</div>
+    ${DATA.expenses.slice(0,3).map(e=>expRow(e)).join('')}
+  </div>`;
+}
+function expRow(e){
+  return `<div class="checkrow"><div class="grow" style="border-bottom:1px solid var(--border-subtle);padding:10px 2px">
+    <span class="dot" style="width:10px;height:10px;border-radius:50%;background:${catColor(e.c)}"></span>
+    <span class="t" style="font-weight:600">${e.n}</span>
+    <span class="eyebrow">${e.c} · ${e.w}</span>
+    <span class="amountbig" style="font-weight:700">${eur(e.a)}</span></div></div>`;
+}
+function expB(){
+  return `<div class="body scrollpad">
+    <div class="card lift" style="margin-bottom:14px">
+      <div class="eyebrow">Importo</div>
+      <div style="display:flex;align-items:baseline;gap:6px;margin:6px 0 14px"><span style="font-size:30px;color:var(--text-muted)">€</span>
+        <span class="amountbig" style="font-size:48px">12,50</span></div>
+      <div class="eyebrow" style="margin-bottom:8px">Categoria</div>
+      <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px">
+        ${DATA.cats.map((c,i)=>`<span class="chip ${i===1?'on':''}"><span class="dot" style="background:var(${c.v})"></span>${c.name}</span>`).join('')}</div>
+      <div style="display:flex;gap:9px;margin-bottom:11px"><span class="chip">${ic('cal')}&nbsp;Oggi</span></div>
+      <input class="field" placeholder="Nota (facoltativa)" value="Pranzo bar" style="margin-bottom:14px">
+      <button class="btn">${ic('check')} Salva spesa</button>
+    </div>
+    <div class="secttitle" style="margin:6px 4px 12px">Recenti <span class="eyebrow">${eur(DATA.month.spent)} questo mese</span></div>
+    ${DATA.expenses.map(e=>`<div class="card lift" style="display:flex;align-items:center;gap:12px;margin-bottom:10px">
+      <span style="width:34px;height:34px;border-radius:10px;display:grid;place-items:center;background:color-mix(in srgb,${catColor(e.c)} 18%,transparent);color:${catColor(e.c)}">${ic('exp')}</span>
+      <div style="flex:1"><div style="font-weight:600">${e.n}</div><div class="eyebrow">${e.c} · ${e.w}</div></div>
+      <div class="amountbig" style="font-weight:700;font-size:16px">${eur(e.a)}</div></div>`).join('')}
+  </div>`;
+}
+function expC(){
+  const segs=DATA.cats.map(c=>({value:c.total,color:`var(${c.v})`}));
+  return `<div class="body scrollpad">
+    <div class="apphead" style="padding:0 0 12px"><h2 class="h">Spese</h2><span class="eyebrow">Cattura + storico</span></div>
+    <div class="grid">
+      <div class="card widget span2" style="background:linear-gradient(140deg,var(--accent-soft),var(--surface))">
+        <h4>${ic('plus')} Nuova spesa</h4>
+        <div style="display:flex;align-items:baseline;gap:6px"><span style="font-size:22px;color:var(--text-muted)">€</span><span class="amountbig" style="font-size:38px">12,50</span></div>
+        <div style="display:flex;flex-wrap:wrap;gap:7px;margin:11px 0">
+          ${DATA.cats.slice(0,4).map((c,i)=>`<span class="chip ${i===1?'on':''}"><span class="dot" style="background:var(${c.v})"></span>${c.name}</span>`).join('')}</div>
+        <button class="btn">${ic('check')} Salva</button>
+      </div>
+      <div class="card widget"><h4>${ic('exp')} Categorie</h4><div class="svgwrap">${donut(segs,110)}</div></div>
+      <div class="card widget"><h4>Budget</h4><div class="stat"><div class="v" style="font-size:20px">${eur(DATA.month.spent)}</div><div class="k">su ${eur(DATA.month.budget)}</div></div>
+        <div class="progressbar" style="margin-top:8px"><i style="width:${DATA.month.spent/DATA.month.budget*100}%"></i></div></div>
+      <div class="card widget span2"><h4>${ic('exp')} Recenti</h4>${DATA.expenses.slice(0,4).map(e=>expRow(e)).join('')}</div>
+    </div>
+  </div>`;
+}
+
+/* ---------- NOTA (cattura rapida) ---------- */
+function noteRecent(e){
+  return `<div class="card lift" style="margin-bottom:10px">
+    <div style="display:flex;align-items:center;gap:8px"><b style="flex:1">${e.t}</b><span class="eyebrow">${e.w}</span></div>
+    <div style="color:var(--text-muted);font-size:13px;margin:4px 0 8px">${e.b}</div>
+    <div style="display:flex;gap:6px;flex-wrap:wrap">${e.tags.map(t=>`<span class="tag">#${t}</span>`).join('')}</div></div>`;
+}
+function noteA(){
+  return `<div class="body scrollpad">
+    <div class="apphead" style="padding:0 0 6px"><h2 class="h">Nuova nota</h2><span class="eyebrow">1 tap → scrivi</span></div>
+    <input class="field" placeholder="Titolo (facoltativo)" style="font-weight:600;margin-bottom:8px">
+    <textarea class="field" rows="5" placeholder="Scrivi qui…">Ricordarsi di esportare le note in Obsidian col frontmatter YAML.</textarea>
+    <div style="display:flex;gap:7px;flex-wrap:wrap;margin:10px 0">
+      <span class="chip on">${ic('tag')} idee</span><span class="chip">${ic('tag')} dev</span><span class="chip">${ic('plus')} tag</span></div>
+    <button class="btn">${ic('check')} Salva nota</button>
+    <div style="display:flex;align-items:center;gap:8px;margin:18px 0 8px">
+      <span class="eyebrow">Recenti</span><div style="flex:1"></div>
+      <span class="chip" style="padding:4px 9px">${ic('search')}</span></div>
+    ${DATA.notes.map(n=>`<div class="checkrow"><div class="grow" style="border-bottom:1px solid var(--border-subtle);padding:11px 2px;align-items:flex-start">
+      <span class="check sm" style="border-radius:6px;border-style:dashed">${ic('note')}</span>
+      <div style="flex:1"><div style="font-weight:600">${n.t}</div><div class="eyebrow" style="margin-top:2px">${n.tags.map(t=>'#'+t).join(' ')} · ${n.w}</div></div></div></div>`).join('')}
+  </div>`;
+}
+function noteB(){
+  return `<div class="body scrollpad">
+    <div class="card lift" style="margin-bottom:14px;background:linear-gradient(180deg,var(--surface),var(--surface-2))">
+      <div class="eyebrow" style="margin-bottom:8px">Nuova nota</div>
+      <input class="field" placeholder="Titolo (facoltativo)" style="font-weight:700;font-size:17px;border:0;background:transparent;padding-left:0;margin-bottom:6px">
+      <textarea class="field" rows="4" placeholder="Scrivi qui…" style="border:0;background:transparent;padding-left:0">Buona costanza sull'inglese questa settimana. [[Riflessione settimana]]</textarea>
+      <div style="display:flex;gap:7px;flex-wrap:wrap;margin:8px 0 14px">
+        <span class="chip on">${ic('tag')} diario</span><span class="chip">${ic('plus')} tag</span></div>
+      <button class="btn">${ic('check')} Salva nota</button>
+    </div>
+    <div class="secttitle" style="margin:6px 4px 12px">Le tue note <span class="eyebrow">${DATA.notes.length}</span></div>
+    ${DATA.notes.map(noteRecent).join('')}
+  </div>`;
+}
+function noteC(){
+  const tags=[...new Set(DATA.notes.flatMap(n=>n.tags))];
+  return `<div class="body scrollpad">
+    <div class="apphead" style="padding:0 0 12px"><h2 class="h">Note</h2><span class="eyebrow">Cattura + archivio</span></div>
+    <div class="card widget" style="margin-bottom:12px;background:linear-gradient(140deg,var(--accent-soft),var(--surface))">
+      <h4>${ic('plus')} Cattura rapida</h4>
+      <textarea class="field" rows="2" placeholder="Scrivi una nota…" style="margin-bottom:9px">Idea: widget Telegram per le note al volo</textarea>
+      <div style="display:flex;gap:8px"><span class="chip on">${ic('tag')} idee</span><button class="btn" style="width:auto;padding:9px 16px">${ic('check')} Salva</button></div>
+    </div>
+    <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px">
+      <span class="chip on">Tutte</span>${tags.map(t=>`<span class="chip">#${t}</span>`).join('')}</div>
+    <div class="grid">${DATA.notes.map(n=>`<div class="card lift">
+      <b style="font-size:14px">${n.t}</b>
+      <div style="color:var(--text-muted);font-size:12.5px;margin:5px 0 8px">${n.b}</div>
+      <div style="display:flex;gap:5px;flex-wrap:wrap">${n.tags.map(t=>`<span class="tag">#${t}</span>`).join('')}</div></div>`).join('')}</div>
+  </div>`;
+}
+
+const RENDER = {
+  home:{A:homeA,B:homeB,C:homeC}, dash:{A:dashA,B:dashB,C:dashC},
+  exp:{A:expA,B:expB,C:expC}, note:{A:noteA,B:noteB,C:noteC}
+};
+const DIR_META = {
+  A:{name:"Compatta · Bottom-nav", desc:"Liste dense, navigazione in basso con FAB centrale. Massima velocità di cattura e densità informativa con una mano sul telefono. Trade-off: può sembrare affollata su schermi grandi."},
+  B:{name:"Ariosa · Card · Tab in alto", desc:"Card spaziose con hover-lift, tab in alto, più respiro e testo grande. Lettura serena, ottima su desktop/tablet. Trade-off: più scroll su mobile, meno densità."},
+  C:{name:"Griglia · Command center", desc:"Hero con anello + Modalità Oggi, widget a griglia, sidebar su desktop. Massima visione d'insieme e dashboard-centrica. Trade-off: più elementi, leggermente più complessa."}
+};
+
+/* ====================== [JS-4] RENDER STAGE ====================== */
+const state = { mode:'compare', screen:'home', dir:'A', dev:'phone', lang:'it',
+  ui:1, sp:1, cr:1, tx:1, focus:false };
+
+function frame(dir, screen){
+  const inner = RENDER[screen][dir]();
+  let nav, head='';
+  if(state.dev==='desktop' && dir==='C'){
+    // sidebar layout
+    return `<div class="device ${state.dev}"><div class="winbar"><i></i><i></i><i></i><span class="url">obiettivi-note · ${screen}</span></div>
+      <div class="glass dir-${dir}"><div class="withside">${navSide(screen)}<div class="vp"><div class="screen">${inner}</div></div></div></div></div>`;
+  }
+  if(dir==='B'){ nav = navTop(screen);
+    const wrapper = state.dev==='desktop'
+      ? `<div class="winbar"><i></i><i></i><i></i><span class="url">obiettivi-note · ${screen}</span></div><div class="glass dir-${dir}">${nav}<div class="vp"><div class="screen">${inner}</div></div></div>`
+      : `<div class="glass dir-${dir}">${statusbar()}${nav}<div class="vp"><div class="screen">${inner}</div></div></div>`;
+    return `<div class="device ${state.dev}">${wrapper}</div>`;
+  }
+  // A e C-mobile: bottom nav
+  nav = navBottom(screen);
+  const wrapper = state.dev==='desktop'
+    ? `<div class="winbar"><i></i><i></i><i></i><span class="url">obiettivi-note · ${screen}</span></div><div class="glass dir-${dir}"><div class="vp"><div class="screen">${inner}</div></div>${nav}</div>`
+    : `<div class="glass dir-${dir}">${statusbar()}<div class="vp"><div class="screen">${inner}</div></div>${nav}</div>`;
+  return `<div class="device ${state.dev}">${wrapper}</div>`;
+}
+
+function render(){
+  applyVars();
+  const st=$('#stage'); const t=I18N[state.lang];
+  if(state.mode==='compare'){
+    const sc=state.screen, scName=t[SCREENS.find(s=>s.k===sc).i];
+    st.innerHTML = `<div class="sectionhead"><span class="eyebrow">${t.confronta}</span>
+      <h2>${scName} — 3 direzioni a confronto</h2>
+      <p>Stessa schermata, tre rendering diversi. Scegli quello che senti tuo (o dimmi di combinarne pezzi).</p></div>
+      <div class="lane">
+        ${['A','B','C'].map(d=>`<div class="col">
+          <div class="cap"><h3><span class="badge">${d}</span> ${DIR_META[d].name}</h3><p>${DIR_META[d].desc}</p></div>
+          ${frame(d,sc)}</div>`).join('')}
+      </div>`;
+  } else {
+    const d=state.dir;
+    st.innerHTML = `<div class="sectionhead"><span class="eyebrow">${t.esplora} · ${d}</span>
+      <h2>Direzione ${d} — ${DIR_META[d].name}</h2><p>${DIR_META[d].desc}</p></div>
+      <div class="lane">
+        ${SCREENS.map(s=>`<div class="col"><div class="cap"><h3>${t[s.i]}</h3></div>${frame(d,s.k)}</div>`).join('')}
+      </div>`;
+  }
+  // wiring focus button (solo dir C home)
+  $$('[data-focus]').forEach(b=>b.onclick=()=>openFocus());
+  // checkbox toggle ephemeral
+  $$('.check').forEach(c=>c.onclick=e=>{e.stopPropagation(); c.classList.toggle('on');
+    const row=c.closest('.checkrow'); if(row) row.classList.toggle('done', c.classList.contains('on'));});
+}
+
+/* ====================== [JS-5] WIRING ====================== */
+function applyVars(){
+  const s=$('#stage');
+  s.style.setProperty('--ui',state.ui); s.style.setProperty('--sp',state.sp);
+  s.style.setProperty('--cr',state.cr); s.style.setProperty('--tx',state.tx);
+}
+function setTheme(tm){
+  document.documentElement.setAttribute('data-theme',tm);
+  try{localStorage.setItem('argo.theme',tm);}catch(e){}
+  $('#themeBtn').innerHTML = ic(tm==='dark'?'sun':'moon');
+  const m=document.querySelector('meta[name=theme-color]:not([media])')||null;
+}
+function applyI18n(){
+  const t=I18N[state.lang];
+  $$('[data-i]').forEach(el=>{const k=el.getAttribute('data-i'); if(t[k])el.textContent=t[k];});
+  $('#langBtn').textContent = state.lang.toUpperCase();
+  $('#hint').textContent = state.mode==='compare'?t.hintCompare:t.hintExplore;
+}
+function toast(msg){const e=$('#toast'); e.textContent=msg; e.classList.add('on'); setTimeout(()=>e.classList.remove('on'),1600);}
+
+function openFocus(){
+  const d=DATA;
+  $('#focus').innerHTML = `<div class="fhead">${ic('expand')}<h2>Oggi · ${d.today.label}</h2>
+    <button class="iconbtn" style="margin-left:auto" id="focusClose">✕</button></div>
+    <div class="fbig">${d.daily.map(g=>`<div class="fgoal ${g.done?'done':''}">${checkbox(g.done)}<span>${g.t}</span></div>`).join('')}
+    <div class="eyebrow" style="text-align:center;margin-top:14px">Modalità Oggi · overlay fullscreen (Fullscreen API)</div></div>`;
+  $('#focus').classList.add('on');
+  $('#focusClose').onclick=closeFocus;
+  $$('#focus .check').forEach(c=>c.onclick=()=>{c.classList.toggle('on'); c.closest('.fgoal').classList.toggle('done');});
+  try{ if(document.documentElement.requestFullscreen) document.documentElement.requestFullscreen(); }catch(e){}
+}
+function closeFocus(){ $('#focus').classList.remove('on'); try{ if(document.fullscreenElement) document.exitFullscreen(); }catch(e){} }
+document.addEventListener('fullscreenchange',()=>{ if(!document.fullscreenElement) $('#focus').classList.remove('on'); });
+
+/* controlli segmentati */
+function segWire(id, attr, fn){
+  $('#'+id).addEventListener('click',e=>{const b=e.target.closest('button'); if(!b)return;
+    $$('#'+id+' button').forEach(x=>x.classList.remove('on')); b.classList.add('on');
+    fn(b.getAttribute(attr)); });
+}
+segWire('modeSeg','data-mode',v=>{ state.mode=v;
+  $('#screenWrap').style.display = v==='compare'?'':'none';
+  $('#dirWrap').style.display = v==='explore'?'':'none';
+  applyI18n(); render(); });
+segWire('screenSeg','data-screen',v=>{state.screen=v; render();});
+segWire('dirSeg','data-dir',v=>{state.dir=v; render();});
+segWire('devSeg','data-dev',v=>{state.dev=v; render();});
+
+$('#themeBtn').onclick=()=>setTheme(document.documentElement.getAttribute('data-theme')==='dark'?'light':'dark');
+$('#langBtn').onclick=()=>{state.lang=state.lang==='it'?'en':'it'; applyI18n(); render();};
+$('#setBtn').onclick=()=>{$('#settings').classList.add('on'); $('#scrim').classList.add('on');};
+$('#scrim').onclick=()=>{$('#settings').classList.remove('on'); $('#scrim').classList.remove('on');};
+
+function rangeWire(id,key,valId,fmt){ const r=$('#'+id);
+  r.addEventListener('input',()=>{ state[key]=r.value/100; $('#'+valId).textContent=fmt(r.value); applyVars(); }); }
+rangeWire('uiR','ui','uiVal',v=>v+'%'); rangeWire('spR','sp','spVal',v=>v+'%');
+rangeWire('crR','cr','crVal',v=>v+'%'); rangeWire('txR','tx','txVal',v=>v+'%');
+
+/* init */
+setTheme(document.documentElement.getAttribute('data-theme')||'light');
+applyI18n(); render();
+</script>
+</body>
+</html>

@@ -1,0 +1,1186 @@
+<!DOCTYPE html>
+<html lang="it" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
+<title>Obiettivi & Note</title>
+
+<!-- =====================================================================
+     OBIETTIVI & NOTE  ·  codename "Argo"  ·  core single-file (Fase 2)
+     Direzione: IBRIDO A+C — bottom-nav + FAB + liste dense; Storico a griglia.
+     Offline-first: localStorage granulare (sorgente di verità della UI) +
+     adapter Firestore opzionale (sync realtime, config-driven, vedi [FB]).
+
+     TABLE OF CONTENTS
+       [HEAD]   anti-FOUC · meta theme-color · fonts
+       [CSS-1]  token caldi (light/dark) + categorical palette
+       [CSS-2]  shell (header, bottom-nav, FAB, sheet, toast, focus)
+       [CSS-3]  componenti (card, check, chip, ring, chart, field…)
+       [CSS-4]  schermate (home / storico / spese / note)
+       [JS-1]   utils (date, id, slug NFD, i18n, icone, grafici SVG)
+       [JS-2]   STORE: localStorage granulare + migrazioni + seed demo + routine (ricorrenza)
+       [JS-3]   Firestore adapter (gated) [FB]
+       [JS-4]   stato + derive (stats: completamento, streak, lacune…)
+       [JS-5]   render() + renderHome/Storico/Spese/Note/Settings
+       [JS-6]   azioni (CRUD goals/notes/expenses) via event-delegation
+       [JS-7]   export (json/html/csv/md/ics/xlsx) + import
+       [JS-8]   temi · focus-mode · layout-vars · i18n · init
+     ===================================================================== -->
+
+<script>/* [HEAD] anti-FOUC */(function(){try{var t=localStorage.getItem('argo.theme');
+  if(t!=='light'&&t!=='dark')t=matchMedia('(prefers-color-scheme:dark)').matches?'dark':'light';
+  document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
+<meta name="theme-color" content="#F6F4EE" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#15171C" media="(prefers-color-scheme: dark)">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Obiettivi">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet">
+
+<style>
+/* ============================ [CSS-1] TOKENS ============================ */
+:root{
+  color-scheme:light;
+  --bg:#F6F4EE; --surface:#FFFFFF; --surface-2:#EFECE3; --surface-3:#E6E1D2;
+  --border:#DDD7C7; --border-strong:#C5BDA6; --border-subtle:#ECE7DA;
+  --text:#1A1D24; --text-muted:#5B626E; --text-subtle:#7B8290; --text-inverse:#FFFFFF;
+  --accent:#C15F3C; --accent-2:#E0A028; --accent-soft:#F3E4D8;
+  --ok:#5E8C4A; --ok-bg:#E7EFDD; --warn:#BD7223; --bad:#C0492F; --bad-bg:#F6E2DC;
+  --r-sm:8px; --r-md:13px; --r-lg:20px; --r-pill:999px;
+  --shadow-sm:0 1px 2px rgba(20,18,12,.06),0 1px 3px rgba(20,18,12,.05);
+  --shadow-md:0 2px 5px rgba(20,18,12,.08),0 7px 18px rgba(20,18,12,.08);
+  --shadow-lg:0 8px 26px rgba(20,18,12,.13),0 20px 52px rgba(20,18,12,.15);
+  --font-ui:"Inter",-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif;
+  --font-mono:"JetBrains Mono",ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+  --cat-Spesa:#C15F3C; --cat-Cibo:#E0A028; --cat-Trasporti:#4E8D7C;
+  --cat-Casa:#7A6FB0; --cat-Svago:#D06A8C; --cat-Varie:#9A8E78; --cat-_:#9A8E78;
+  /* layout-vars regolabili da impostazioni */
+  --ui:1; --sp:1; --cr:1; --tx:1;
+}
+:root[data-theme="dark"]{
+  color-scheme:dark;
+  --bg:#15171C; --surface:#1C1F26; --surface-2:#232730; --surface-3:#2C313C;
+  --border:#2F3540; --border-strong:#434A57; --border-subtle:#232730;
+  --text:#ECE9E0; --text-muted:#A8AEBA; --text-subtle:#858C99; --text-inverse:#15171C;
+  --accent:#E07A52; --accent-2:#EBB44E; --accent-soft:#2E2620;
+  --ok:#7FB069; --ok-bg:#26301F; --warn:#D89A4A; --bad:#E0795E; --bad-bg:#33211C;
+  --shadow-sm:0 1px 2px rgba(0,0,0,.35),0 1px 3px rgba(0,0,0,.30);
+  --shadow-md:0 2px 6px rgba(0,0,0,.45),0 8px 22px rgba(0,0,0,.42);
+  --shadow-lg:0 10px 32px rgba(0,0,0,.6),0 22px 60px rgba(0,0,0,.62);
+  --cat-Spesa:#D8714C; --cat-Cibo:#EBB44E; --cat-Trasporti:#5FA593;
+  --cat-Casa:#9488C7; --cat-Svago:#E083A3; --cat-Varie:#B0A488; --cat-_:#B0A488;
+}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%}
+body{background:var(--bg);color:var(--text);font-family:var(--font-ui);font-size:calc(16px*var(--tx));
+  line-height:1.5;-webkit-font-smoothing:antialiased;overscroll-behavior:none}
+button{font-family:inherit;cursor:pointer;color:inherit;border:0;background:none}
+[data-act],[data-cat],[data-ac],[data-day],[data-edit],[data-toggle],[data-del],[data-delcat],[data-h],[data-pm],[data-rt],[data-pre],[data-x],[data-k],label,.chip,.check,.swatch,.switch,.weekchip,.card.lift{cursor:pointer}
+input,textarea,select{font-family:inherit}
+.eyebrow{font-family:var(--font-mono);font-size:10px;font-weight:600;letter-spacing:.2em;
+  text-transform:uppercase;color:var(--text-muted)}
+.mono{font-family:var(--font-mono)}
+.muted{color:var(--text-muted)} .subtle{color:var(--text-subtle)}
+::-webkit-scrollbar{width:9px;height:9px}
+::-webkit-scrollbar-thumb{background:var(--border-strong);border-radius:99px;border:3px solid var(--bg)}
+svg{display:block}
+
+/* ============================ [CSS-2] SHELL ============================ */
+#app{max-width:680px;margin:0 auto;min-height:100%;display:flex;flex-direction:column;position:relative;
+  zoom:var(--ui)}
+.apphead{position:sticky;top:0;z-index:20;display:flex;align-items:center;gap:12px;
+  padding:14px 18px 12px;background:color-mix(in srgb,var(--bg) 85%,transparent);backdrop-filter:blur(12px);
+  border-bottom:1px solid var(--border)}
+.apphead .ttl{display:flex;flex-direction:column;gap:1px;margin-right:auto;min-width:0}
+.apphead .ttl h1{margin:0;font-size:21px;font-weight:800;letter-spacing:-.02em;line-height:1.1}
+.apphead .iconbtn{width:38px;height:38px;border-radius:var(--r-md);display:grid;place-items:center;
+  background:var(--surface);border:1px solid var(--border);box-shadow:var(--shadow-sm)}
+.apphead .iconbtn:active{transform:scale(.94)}
+@media(hover:hover){.apphead .iconbtn:hover{border-color:var(--border-strong);box-shadow:var(--shadow-md)}}
+.apphead .iconbtn svg{width:19px;height:19px}
+.synced{display:inline-flex;align-items:center;gap:5px;font-family:var(--font-mono);font-size:9px;
+  letter-spacing:.1em;text-transform:uppercase;color:var(--text-subtle)}
+.synced .dot{width:7px;height:7px;border-radius:50%;background:var(--text-subtle)}
+.synced.on .dot{background:var(--ok)} .synced.off .dot{background:var(--warn)}
+
+main{flex:1 1 auto;padding:16px 16px 120px;width:100%}
+.scrollarea{outline:none}
+
+.bottomnav{position:fixed;left:50%;transform:translateX(-50%);bottom:0;width:100%;max-width:680px;height:70px;
+  display:flex;align-items:center;justify-content:space-around;z-index:30;
+  background:color-mix(in srgb,var(--surface) 92%,transparent);backdrop-filter:blur(12px);
+  border-top:1px solid var(--border);padding-bottom:env(safe-area-inset-bottom)}
+.bottomnav button{display:flex;flex-direction:column;align-items:center;gap:3px;color:var(--text-subtle);
+  font-family:var(--font-mono);font-size:9px;letter-spacing:.05em;text-transform:uppercase;width:58px;padding:6px 0}
+.bottomnav button svg{width:23px;height:23px}
+.bottomnav button.on{color:var(--accent)}
+.bottomnav .fab{width:56px;height:56px;border-radius:50%;color:#fff;
+  background:radial-gradient(circle at 50% 28%,color-mix(in srgb,var(--accent) 82%,#fff),var(--accent));
+  display:grid;place-items:center;margin-top:-26px;border:4px solid var(--bg);
+  box-shadow:0 8px 22px color-mix(in srgb,var(--accent) 50%,transparent),0 2px 6px rgba(20,18,12,.22)}
+.bottomnav .fab svg{width:27px;height:27px}
+.bottomnav .fab:active{transform:scale(.92)}
+
+/* sheet (bottom sheet / modal) */
+.scrim{position:fixed;inset:0;background:rgba(20,18,12,.46);opacity:0;pointer-events:none;transition:.22s;z-index:40}
+.scrim.on{opacity:1;pointer-events:auto}
+.sheet{position:fixed;left:50%;transform:translateX(-50%) translateY(110%);bottom:0;width:100%;max-width:680px;
+  z-index:50;background:var(--surface);border-radius:24px 24px 0 0;border:1px solid var(--border);border-bottom:0;
+  box-shadow:var(--shadow-lg);transition:transform .28s cubic-bezier(.4,0,.2,1);max-height:92vh;display:flex;flex-direction:column}
+.sheet.on{transform:translateX(-50%) translateY(0)}
+.sheet .grab{width:40px;height:4px;border-radius:99px;background:var(--border-strong);margin:10px auto 4px}
+.sheet .shead{display:flex;align-items:center;gap:10px;padding:6px 20px 12px}
+.sheet .shead h2{margin:0;font-size:18px;font-weight:700}
+.sheet .sbody{padding:0 20px 24px;overflow:auto}
+.sheet .x{margin-left:auto;width:34px;height:34px;border-radius:50%;background:var(--surface-2);display:grid;place-items:center}
+
+.toast{position:fixed;left:50%;bottom:90px;transform:translateX(-50%) translateY(16px);background:var(--text);
+  color:var(--bg);padding:11px 18px;border-radius:var(--r-pill);font-size:13px;font-weight:600;
+  box-shadow:var(--shadow-lg);opacity:0;pointer-events:none;transition:.25s;z-index:60;max-width:90%}
+.toast.on{opacity:1;transform:translateX(-50%) translateY(0)}
+
+.focus{position:fixed;inset:0;z-index:70;display:none;flex-direction:column;overflow:auto;
+  padding:clamp(20px,6vw,50px);background:radial-gradient(1100px 520px at 50% -8%,var(--accent-soft),transparent 60%),var(--bg)}
+.focus.on{display:flex}
+.focus .fhead{display:flex;align-items:center;gap:14px;margin-bottom:8px;max-width:640px;width:100%;margin-inline:auto}
+.focus .fhead h2{margin:0;font-size:clamp(24px,5vw,40px);letter-spacing:-.02em}
+.focus .fsub{max-width:640px;width:100%;margin:0 auto 26px}
+.focus .fhero{max-width:640px;width:100%;margin:0 auto 20px;display:flex;align-items:center;gap:18px;
+  background:linear-gradient(135deg,var(--accent-soft),var(--surface));border:1px solid var(--border-strong);
+  border-radius:var(--r-lg);padding:18px 20px;box-shadow:var(--shadow-md)}
+.focus .fbignum{font-size:26px;font-weight:800;letter-spacing:-.02em;line-height:1.1}
+.focus .fbignum span{font-size:15px;font-weight:600;color:var(--text-muted)}
+.focus .fmeta{font-family:var(--font-mono);font-size:12px;color:var(--text-muted);margin-top:4px}
+.focus .fdone{display:inline-flex;align-items:center;gap:5px;margin-top:7px;font-size:12px;font-weight:700;color:var(--ok)}
+.focus .fdone svg{width:15px;height:15px;stroke:var(--ok)}
+.focus .fbig{max-width:640px;width:100%;margin:0 auto;display:flex;flex-direction:column;gap:12px}
+.focus .fgoal{padding:15px 18px;background:var(--surface);border:1px solid var(--border);
+  border-radius:var(--r-lg);box-shadow:var(--shadow-md);transition:box-shadow .16s}
+.focus .fgoal.done{opacity:.62}
+.focus .fgrow{display:flex;align-items:center;gap:15px;font-size:18px;font-weight:600;cursor:pointer}
+.focus .fgoal.done .fgrow>.grow{text-decoration:line-through;text-decoration-thickness:2px;text-decoration-color:color-mix(in srgb,var(--text-subtle) 60%,transparent);color:var(--text-subtle)}
+.focus .fpill{font-family:var(--font-mono);font-size:13px;font-weight:600;color:var(--accent);background:var(--accent-soft);padding:3px 10px;border-radius:var(--r-pill);flex:0 0 auto}
+.focus .fprog{height:6px;border-radius:99px;background:var(--surface-3);overflow:hidden;margin:13px 2px 2px;box-shadow:inset 0 1px 2px rgba(20,18,12,.08)}
+.focus .fprog i{display:block;height:100%;background:linear-gradient(90deg,var(--accent),var(--accent-2));border-radius:99px;transition:width .35s cubic-bezier(.4,0,.2,1)}
+.focus .fsubs{display:flex;flex-direction:column;margin-top:6px}
+.focus .fsub2{display:flex;align-items:center;gap:13px;padding:10px 4px;font-size:15px;color:var(--text-muted);border-top:1px solid var(--border-subtle);cursor:pointer}
+.focus .fsub2.done .grow{text-decoration:line-through;text-decoration-thickness:2px;text-decoration-color:color-mix(in srgb,var(--text-subtle) 70%,transparent);color:var(--text-subtle)}
+.focus .ftrend{max-width:640px;width:100%;margin:24px auto 10px;background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);box-shadow:var(--shadow-md);padding:15px 18px 14px}
+.focus .ftrend .eyebrow{margin-bottom:13px;display:block}
+.focus .ftval{font-family:var(--font-mono);font-size:11px;font-weight:700;color:var(--accent);min-height:14px;line-height:1}
+.focus .ftrend .bartrack{max-width:34px}
+
+/* ========================== [CSS-3] COMPONENTI ========================== */
+.card{background:var(--surface);border:1px solid var(--border);border-radius:calc(var(--r-md)*var(--cr));
+  box-shadow:var(--shadow-md);padding:calc(14px*var(--sp))}
+.card.lift{transition:transform .16s ease,box-shadow .16s ease,border-color .16s ease} .card.lift:active{transform:scale(.99)}
+@media(hover:hover){.card.lift:hover{transform:translateY(-2px);box-shadow:var(--shadow-lg);border-color:var(--border-strong)}}
+.row{display:flex;align-items:center;gap:11px}
+.col{display:flex;flex-direction:column}
+.grow{flex:1 1 auto;min-width:0}
+.spacer{flex:1 1 auto}
+.ell{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+h2.sec{font-size:13px;font-weight:700;margin:22px 4px 11px;display:flex;align-items:center;gap:8px}
+h2.sec .eyebrow{margin-left:auto}
+
+.check{width:23px;height:23px;border-radius:7px;border:2px solid var(--border-strong);flex:0 0 auto;
+  display:grid;place-items:center;transition:.14s;background:var(--surface)}
+.check svg{width:14px;height:14px;stroke:#fff;opacity:0;transition:.14s}
+.check.on{background:var(--accent);border-color:var(--accent)} .check.on svg{opacity:1}
+.check.sm{width:19px;height:19px;border-radius:6px}
+.strike{position:relative}
+.done>.strike,.done .strikeable{color:var(--text-subtle);text-decoration:line-through;text-decoration-color:color-mix(in srgb,var(--text-subtle) 70%,transparent);text-decoration-thickness:2px;text-underline-offset:0}
+
+.pill{display:inline-flex;align-items:center;gap:5px;font-family:var(--font-mono);font-size:11px;font-weight:600;
+  padding:3px 9px;border-radius:var(--r-pill);background:var(--surface-2);color:var(--text-muted);border:1px solid var(--border-subtle)}
+.pill.ok{background:var(--ok-bg);color:var(--ok);border-color:transparent}
+.pill.accent{background:var(--accent-soft);color:var(--accent);border-color:transparent}
+.pill.bad{background:var(--bad-bg);color:var(--bad);border-color:transparent}
+.chip{display:inline-flex;align-items:center;gap:6px;font-size:13px;font-weight:600;padding:6px 12px;border-radius:var(--r-pill);
+  background:var(--surface-2);border:1px solid var(--border);color:var(--text-muted)}
+.chip.on{background:var(--accent);color:#fff;border-color:var(--accent);box-shadow:var(--shadow-sm)}
+.chip .dot{width:9px;height:9px;border-radius:50%;flex:0 0 auto}
+.tag{font-family:var(--font-mono);font-size:10px;letter-spacing:.03em;color:var(--accent);background:var(--accent-soft);
+  padding:2px 7px;border-radius:6px}
+.iconmini{width:34px;height:34px;border-radius:10px;display:grid;place-items:center;flex:0 0 auto}
+
+.progressbar{height:7px;border-radius:99px;background:var(--surface-3);overflow:hidden;box-shadow:inset 0 1px 2px rgba(20,18,12,.08)}
+.progressbar i{display:block;height:100%;background:linear-gradient(90deg,var(--accent),var(--accent-2));border-radius:99px;transition:width .3s}
+.stat .v{font-size:25px;font-weight:800;letter-spacing:-.02em;line-height:1}
+.stat .v small{font-size:13px;font-weight:600;color:var(--text-muted)}
+.stat .k{font-family:var(--font-mono);font-size:9px;letter-spacing:.1em;text-transform:uppercase;color:var(--text-muted);margin-top:4px}
+
+.field{width:100%;padding:12px 13px;border:1px solid var(--border);border-radius:var(--r-sm);background:var(--surface);
+  color:var(--text);font-size:15px;outline:none}
+.field:focus{border-color:var(--accent)}
+.field::placeholder{color:var(--text-subtle)}
+textarea.field{resize:vertical;line-height:1.6;min-height:90px}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;padding:13px 18px;border-radius:var(--r-md);
+  background:var(--accent);color:#fff;font-weight:700;font-size:15px;box-shadow:var(--shadow-md);width:100%;transition:transform .12s,box-shadow .16s,filter .16s}
+.btn:active{transform:scale(.99)}
+@media(hover:hover){.btn:hover{box-shadow:var(--shadow-lg);filter:brightness(1.04)}.btn.ghost:hover{filter:none;border-color:var(--border-strong);box-shadow:var(--shadow-md)}}
+.btn.ghost{background:var(--surface);color:var(--text);border:1px solid var(--border);box-shadow:none}
+.btn.sm{padding:9px 14px;font-size:13px;width:auto}
+.btn.danger{background:var(--bad)}
+.iconaction{width:32px;height:32px;border-radius:8px;display:grid;place-items:center;color:var(--text-subtle);transition:.14s}
+.iconaction:active{background:var(--surface-2)}
+@media(hover:hover){.iconaction:hover{background:var(--surface-2);color:var(--text)}}
+.iconaction svg{width:17px;height:17px}
+
+.keypad{display:grid;grid-template-columns:repeat(3,1fr);gap:9px}
+.keypad button{padding:16px 0;font-size:21px;font-weight:600;background:var(--surface-2);border-radius:var(--r-sm);font-family:var(--font-mono)}
+.keypad button:active{background:var(--surface-3)}
+
+.empty{display:flex;flex-direction:column;align-items:center;gap:10px;text-align:center;color:var(--text-muted);
+  padding:46px 20px}
+.empty svg{width:42px;height:42px;opacity:.4}
+.legend{display:flex;flex-direction:column;gap:8px}
+.legend .li{display:flex;align-items:center;gap:9px;font-size:13px}
+.legend .li .sw{width:11px;height:11px;border-radius:3px;flex:0 0 auto}
+.legend .li b{margin-left:auto;font-family:var(--font-mono)}
+.weekheat{display:flex;gap:5px}.weekheat i{flex:1;height:32px;border-radius:5px;background:var(--accent);display:block}
+.heatlabels{display:flex;gap:5px;margin-top:5px}.heatlabels span{flex:1;text-align:center;font-family:var(--font-mono);font-size:9px;color:var(--text-subtle)}
+.barchart{display:flex;align-items:stretch;gap:7px}
+.barcol{flex:1;display:flex;flex-direction:column;align-items:center;gap:7px;min-width:0}
+.bartrack{flex:1;width:100%;max-width:30px;background:var(--surface-3);border-radius:var(--r-sm);display:flex;align-items:flex-end;overflow:hidden;box-shadow:inset 0 1px 3px rgba(20,18,12,.09)}
+.bartrack .bar{width:100%;background:linear-gradient(180deg,var(--accent-2),var(--accent));border-radius:var(--r-sm);min-height:5px;transition:height .35s cubic-bezier(.4,0,.2,1)}
+.bartrack .bar.dim{background:var(--border-strong);opacity:.5}
+.barcol .bl{font-family:var(--font-mono);font-size:9px;color:var(--text-subtle)}
+.svgwrap{display:grid;place-items:center}
+
+/* ========================== [CSS-4] SCHERMATE ========================== */
+/* HOME */
+.dayhead{display:flex;align-items:center;gap:14px;margin-bottom:14px;
+  background:linear-gradient(135deg,var(--accent-soft),var(--surface));border:1px solid var(--border-strong);
+  border-radius:var(--r-lg);padding:15px 16px;box-shadow:var(--shadow-md)}
+.weekstrip{display:flex;gap:9px;overflow-x:auto;padding-bottom:8px;margin-bottom:4px;scrollbar-width:none}
+.weekstrip::-webkit-scrollbar{height:0}
+.weekchip{flex:0 0 auto;width:150px;background:var(--surface);border:1px solid var(--border);border-radius:var(--r-md);padding:11px 12px;box-shadow:var(--shadow-sm);transition:.16s}
+@media(hover:hover){.weekchip:hover{transform:translateY(-2px);box-shadow:var(--shadow-md);border-color:var(--border-strong)}}
+.glist{display:flex;flex-direction:column}
+.goalrow{display:flex;align-items:center;gap:11px;padding:12px 4px;border-bottom:1px solid var(--border-subtle)}
+.goalrow .t{font-weight:600;font-size:15px}
+.subwrap{overflow:hidden}
+.subrow{display:flex;align-items:center;gap:10px;padding:9px 4px 9px 36px;border-bottom:1px solid var(--border-subtle)}
+.subrow .t{font-size:13.5px;color:var(--text-muted)}
+.addrow{display:flex;align-items:center;gap:10px;padding:11px 4px}
+.addrow input{border:0;background:none;font-size:15px;color:var(--text);width:100%;outline:none}
+.addrow .plusico{width:23px;height:23px;border-radius:7px;border:2px dashed var(--border-strong);display:grid;place-items:center;color:var(--text-subtle)}
+.reord{display:flex;flex-direction:column;gap:1px;opacity:.5}
+.reord button{width:22px;height:16px;display:grid;place-items:center;color:var(--text-muted)}
+.reord svg{width:14px;height:14px}
+
+/* STORICO (griglia widget — direzione C) */
+.kpi{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px}
+.grid .span2{grid-column:1/-1}
+.widget h4{margin:0 0 11px;font-size:12px;display:flex;align-items:center;gap:8px}
+.widget h4 .eyebrow{margin-left:auto}
+@media(min-width:560px){.kpi{grid-template-columns:repeat(4,1fr)}.grid{grid-template-columns:repeat(3,1fr)}}
+
+/* SPESE / NOTE list */
+.listitem{display:flex;align-items:center;gap:12px;padding:12px 4px;border-bottom:1px solid var(--border-subtle)}
+.daygroup{font-family:var(--font-mono);font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--text-subtle);
+  margin:18px 4px 6px;display:flex;align-items:center;gap:8px}
+.daygroup b{margin-left:auto;color:var(--text-muted)}
+.amount{font-family:var(--font-mono);font-weight:700}
+.noteitem{margin-bottom:10px}
+.searchbar{display:flex;align-items:center;gap:9px;background:var(--surface);border:1px solid var(--border);
+  border-radius:var(--r-pill);padding:9px 14px;margin-bottom:10px}
+.searchbar input{border:0;background:none;outline:none;width:100%;font-size:14px;color:var(--text)}
+.searchbar svg{width:17px;height:17px;color:var(--text-subtle)}
+.tagfilter{display:flex;gap:7px;overflow-x:auto;padding-bottom:6px;margin-bottom:8px;scrollbar-width:none}
+.tagfilter::-webkit-scrollbar{height:0}
+
+.settingrow{display:flex;align-items:center;gap:12px;padding:13px 2px;border-bottom:1px solid var(--border-subtle)}
+.settingrow .lbl{font-weight:600;font-size:14px}.settingrow .desc{font-size:12px;color:var(--text-muted)}
+.settingrow input[type=range]{accent-color:var(--accent)}
+.switch{width:44px;height:26px;border-radius:99px;background:var(--surface-3);position:relative;transition:.2s;flex:0 0 auto}
+.switch::after{content:"";position:absolute;top:3px;left:3px;width:20px;height:20px;border-radius:50%;background:#fff;transition:.2s;box-shadow:var(--shadow-sm)}
+.switch.on{background:var(--accent)}.switch.on::after{left:21px}
+.seg{display:inline-flex;background:var(--surface-2);border:1px solid var(--border);border-radius:var(--r-pill);padding:3px}
+.seg button{padding:7px 14px;border-radius:var(--r-pill);font-size:13px;font-weight:600;color:var(--text-muted)}
+.seg button.on{background:var(--surface);color:var(--text);box-shadow:var(--shadow-sm)}
+.swatch{width:30px;height:30px;border-radius:9px;border:2px solid transparent;cursor:pointer}
+.swatch.on{border-color:var(--text)}
+.fbhelp{font-size:12.5px;color:var(--text-muted);background:var(--surface-2);border:1px solid var(--border-subtle);border-radius:var(--r-sm);padding:9px 12px;margin-bottom:4px}
+.fbhelp summary{cursor:pointer;font-weight:700;color:var(--accent);list-style:none}
+.fbhelp summary::-webkit-details-marker{display:none}
+.fbhelp summary::before{content:"›";display:inline-block;margin-right:7px;transition:.2s}
+.fbhelp[open] summary::before{transform:rotate(90deg)}
+.fbhelp ol{margin:10px 0 2px;padding-left:18px;line-height:1.6}
+.fbhelp li{margin:5px 0}
+.fbhelp code{background:var(--surface-3);padding:1px 5px;border-radius:4px;font-size:11px;font-family:var(--font-mono)}
+</style>
+</head>
+<body>
+<div id="app">
+  <header class="apphead">
+    <button class="iconbtn" data-act="open-settings" title="Impostazioni" aria-label="Impostazioni"></button>
+    <div class="ttl"><h1 id="headTitle">Oggi</h1><span class="synced" id="syncBadge"><span class="dot"></span><span id="syncText">Locale</span></span></div>
+    <button class="iconbtn" data-act="toggle-theme" id="themeBtn" title="Tema" aria-label="Tema"></button>
+    <button class="iconbtn" data-act="open-export" title="Esporta" aria-label="Esporta"></button>
+  </header>
+  <main class="scrollarea" id="view" tabindex="-1"></main>
+  <nav class="bottomnav" id="nav"></nav>
+</div>
+
+<div class="scrim" id="scrim"></div>
+<div class="sheet" id="sheet"><div class="grab"></div><div class="shead"><h2 id="sheetTitle"></h2><button class="x" data-act="close-sheet">✕</button></div><div class="sbody" id="sheetBody"></div></div>
+<div class="toast" id="toast"></div>
+<div class="focus" id="focus"></div>
+
+<script>
+"use strict";
+/* ============================ [JS-1] UTILS ============================ */
+const $=(s,r=document)=>r.querySelector(s), $$=(s,r=document)=>[...r.querySelectorAll(s)];
+const uid=()=> (crypto&&crypto.randomUUID)?crypto.randomUUID():'id'+Date.now()+Math.random().toString(36).slice(2,8);
+const slug=s=>(s||'').normalize("NFD").replace(/[̀-ͯ]/g,"").toLowerCase().replace(/[^a-z0-9]+/g,"-").replace(/^-|-$/g,"")||"export";
+const clamp=(n,a,b)=>Math.max(a,Math.min(b,n));
+const esc=s=>(s==null?'':String(s)).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const eur=n=>'€'+(Number(n)||0).toFixed(2).replace('.',',');
+/* date helpers (local) */
+const pad=n=>String(n).padStart(2,'0');
+const ymd=d=>{d=d||new Date();return d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate());};
+const parseYmd=s=>{const[y,m,d]=s.split('-').map(Number);return new Date(y,m-1,d);};
+const todayStr=()=>ymd(new Date());
+function isoWeek(d){d=new Date(d);d.setHours(0,0,0,0);d.setDate(d.getDate()+3-((d.getDay()+6)%7));
+  const wk1=new Date(d.getFullYear(),0,4);return d.getFullYear()+'-W'+pad(1+Math.round(((d-wk1)/864e5-3+((wk1.getDay()+6)%7))/7));}
+const weekKey=s=>isoWeek(parseYmd(s));
+function mondayOf(d){d=new Date(d);const o=(d.getDay()+6)%7;d.setDate(d.getDate()-o);d.setHours(0,0,0,0);return d;}
+const addDays=(d,n)=>{const x=new Date(d);x.setDate(x.getDate()+n);return x;};
+const DOW=['lun','mar','mer','gio','ven','sab','dom'], DOWen=['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+const MON=['gennaio','febbraio','marzo','aprile','maggio','giugno','luglio','agosto','settembre','ottobre','novembre','dicembre'];
+function prettyDate(s){const d=parseYmd(s),t=todayStr();if(s===t)return T('oggi');if(s===ymd(addDays(new Date(),-1)))return T('ieri');
+  return DOW[(d.getDay()+6)%7]+' '+d.getDate()+' '+MON[d.getMonth()].slice(0,3);}
+function relTime(ts){const s=(Date.now()-ts)/1000;if(s<60)return T('ora');if(s<3600)return Math.floor(s/60)+'m';
+  if(s<86400)return Math.floor(s/3600)+'h';const dd=Math.floor(s/86400);return dd===1?T('ieri'):dd+'g';}
+
+/* i18n IT/EN inline */
+let LANG='it';
+const STR={
+ it:{oggi:'Oggi',ieri:'Ieri',ora:'ora',home:'Oggi',storico:'Storico',spese:'Spese',note:'Note',
+   settimana:'Settimana',obiettiviGiorno:'Obiettivi del giorno',nessunObiettivo:'Nessun obiettivo per oggi',
+   aggiungiObiettivo:'Aggiungi obiettivo…',aggiungiSotto:'Aggiungi sotto-task…',obiettiviSett:'Obiettivi settimanali',
+   nuovaSpesa:'Nuova spesa',importo:'Importo',categoria:'Categoria',nota:'Nota (facoltativa)',salva:'Salva',
+   salvaSpesa:'Salva spesa',salvaNota:'Salva nota',recenti:'Recenti',nessunaSpesa:'Ancora nessuna spesa',
+   nuovaNota:'Nuova nota',titoloOpz:'Titolo (facoltativo)',scriviQui:'Scrivi qui…',tag:'tag',cerca:'Cerca…',
+   tutte:'Tutte',nessunaNota:'Ancora nessuna nota',completOggi:'Oggi',completSett:'Settimana',streak:'Streak',
+   speseMese:'Spese mese',completamento:'Completamento',perCategoria:'Per categoria',attivita:'Attività',
+   budget:'Budget mensile',giorniVuoti:'giorni vuoti nel mese',lacune:'Lacune ricorrenti',
+   modalitaOggi:'Modalità Oggi',impostazioni:'Impostazioni',tema:'Tema',lingua:'Lingua',aspetto:'Aspetto',
+   scalaUI:'Scala UI',spaziatura:'Spaziatura',raggio:'Raggio angoli',testo:'Dimensione testo',accento:'Colore accento',
+   categorie:'Categorie',budgetMensile:'Budget mensile (€)',datiSync:'Dati & Sincronizzazione',
+   esporta:'Esporta',backupJson:'Backup completo (JSON)',importa:'Importa backup',htmlStandalone:'Snapshot HTML offline',
+   speseExcel:'Spese → Excel (.xlsx)',speseCsv:'Spese → CSV',noteMd:'Note → Markdown (Obsidian)',taskIcs:'Task → .ics',
+   svuota:'Svuota tutti i dati',datiDemo:'Dati demo caricati — modificali o svuotali dalle impostazioni',
+   elimina:'Elimina',annulla:'Annulla',conferma:'Conferma',fatto:'fatto',daFare:'da fare',sottoTask:'sotto-task',
+   firebaseTit:'Firebase (sync multi-device)',firebaseDesc:'Incolla la config del tuo progetto per attivare la sync realtime. Senza, l\'app resta 100% locale e offline.',
+   connetti:'Connetti',accedi:'Accedi',email:'Email',password:'Password',esci:'Esci',connesso:'Sincronizzato',locale:'Locale',
+   nessunaLacuna:'Nessuna lacuna — bel lavoro',ricorrente:'ricorrente',voltePerse:'volte non completato',
+   aggiungiCat:'+ categoria',nomeCategoria:'Nome categoria',menuRapido:'Cosa vuoi aggiungere?',
+   obiettivo:'Obiettivo',spesa:'Spesa',svuotaConferma:'Eliminare TUTTI i dati locali? Azione irreversibile.',
+   riepilogoMese:'Riepilogo mensile',totale:'Totale',
+   routine:'Routine',nuovaRoutine:'Nuova routine',gestisciRoutine:'Obiettivi ricorrenti',frequenza:'Frequenza',
+   tuttiGiorni:'Tutti i giorni',feriali:'Feriali',weekendF:'Weekend',ogniSett:'Ogni settimana',
+   tipo:'Tipo',quotidiano:'Giornaliero',settimanaleT:'Settimanale',nessunaRoutine:'Nessuna routine ancora',
+   routineHint:'Gli obiettivi ricorrenti compaiono da soli ogni giorno previsto.',rendiRicorrente:'Rendi ricorrente',
+   carryOver:'Riporta non completati',carryOverDesc:'Gli obiettivi non completati ricompaiono il giorno dopo.',riportato:'Riportato da un giorno precedente',
+   lungoTermine:'Obiettivi a lungo termine',traguardo:'Traguardo',nuovoTraguardo:'Nuovo traguardo',aggiungiTraguardo:'Aggiungi traguardo…',
+   orizzonte:'Orizzonte',dataSpec:'Data',trimestre:'Trimestre',semestre:'Semestre',anno:'Anno',scaduto:'Scaduto',scadeIl:'scade',modifica:'Modifica',metodo:'Metodo',
+   taskCompletate:'Task completate',tuttoFatto:'Tutto fatto!',comeSync:'Come sincronizzare con Firebase?'},
+ en:{oggi:'Today',ieri:'Yesterday',ora:'now',home:'Today',storico:'History',spese:'Expenses',note:'Notes',
+   settimana:'Week',obiettiviGiorno:'Today\'s goals',nessunObiettivo:'No goals for today',
+   aggiungiObiettivo:'Add goal…',aggiungiSotto:'Add subtask…',obiettiviSett:'Weekly goals',
+   nuovaSpesa:'New expense',importo:'Amount',categoria:'Category',nota:'Note (optional)',salva:'Save',
+   salvaSpesa:'Save expense',salvaNota:'Save note',recenti:'Recent',nessunaSpesa:'No expenses yet',
+   nuovaNota:'New note',titoloOpz:'Title (optional)',scriviQui:'Write here…',tag:'tag',cerca:'Search…',
+   tutte:'All',nessunaNota:'No notes yet',completOggi:'Today',completSett:'Week',streak:'Streak',
+   speseMese:'Month spend',completamento:'Completion',perCategoria:'By category',attivita:'Activity',
+   budget:'Monthly budget',giorniVuoti:'empty days this month',lacune:'Recurring gaps',
+   modalitaOggi:'Today mode',impostazioni:'Settings',tema:'Theme',lingua:'Language',aspetto:'Appearance',
+   scalaUI:'UI scale',spaziatura:'Spacing',raggio:'Corner radius',testo:'Text size',accento:'Accent color',
+   categorie:'Categories',budgetMensile:'Monthly budget (€)',datiSync:'Data & Sync',
+   esporta:'Export',backupJson:'Full backup (JSON)',importa:'Import backup',htmlStandalone:'Offline HTML snapshot',
+   speseExcel:'Expenses → Excel (.xlsx)',speseCsv:'Expenses → CSV',noteMd:'Notes → Markdown (Obsidian)',taskIcs:'Tasks → .ics',
+   svuota:'Erase all data',datiDemo:'Demo data loaded — edit or clear it in settings',
+   elimina:'Delete',annulla:'Cancel',conferma:'Confirm',fatto:'done',daFare:'to do',sottoTask:'subtasks',
+   firebaseTit:'Firebase (multi-device sync)',firebaseDesc:'Paste your project config to enable realtime sync. Without it, the app stays 100% local and offline.',
+   connetti:'Connect',accedi:'Sign in',email:'Email',password:'Password',esci:'Sign out',connesso:'Synced',locale:'Local',
+   nessunaLacuna:'No gaps — great job',ricorrente:'recurring',voltePerse:'times missed',
+   aggiungiCat:'+ category',nomeCategoria:'Category name',menuRapido:'What do you want to add?',
+   obiettivo:'Goal',spesa:'Expense',svuotaConferma:'Erase ALL local data? This cannot be undone.',
+   riepilogoMese:'Monthly summary',totale:'Total',
+   routine:'Routines',nuovaRoutine:'New routine',gestisciRoutine:'Recurring goals',frequenza:'Frequency',
+   tuttiGiorni:'Every day',feriali:'Weekdays',weekendF:'Weekend',ogniSett:'Every week',
+   tipo:'Type',quotidiano:'Daily',settimanaleT:'Weekly',nessunaRoutine:'No routines yet',
+   routineHint:'Recurring goals show up automatically on each scheduled day.',rendiRicorrente:'Make recurring',
+   carryOver:'Carry over unfinished',carryOverDesc:'Unfinished daily goals reappear the next day.',riportato:'Carried over from a previous day',
+   lungoTermine:'Long-term goals',traguardo:'Milestone',nuovoTraguardo:'New milestone',aggiungiTraguardo:'Add milestone…',
+   orizzonte:'Horizon',dataSpec:'Date',trimestre:'Quarter',semestre:'Semester',anno:'Year',scaduto:'Overdue',scadeIl:'due',modifica:'Edit',metodo:'Method',
+   taskCompletate:'Tasks completed',tuttoFatto:'All done!',comeSync:'How to sync with Firebase?'}
+};
+const T=k=>(STR[LANG][k]!=null?STR[LANG][k]:k);
+
+/* icone SVG */
+const P={home:"M3 11l9-7 9 7M5 10v9a1 1 0 0 0 1 1h3v-6h6v6h3a1 1 0 0 0 1-1v-9",
+ dash:"M3 21h18M6 21V9M12 21V4M18 21v-7",exp:"M3 7h15a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h11M16 13h.5",
+ note:"M6 3h8l5 5v13H6zM14 3v5h5M9 12h6M9 16h4",plus:"M12 5v14M5 12h14",check:"M5 12l4 4L19 7",
+ flame:"M12 21a6 6 0 0 1-6-6c0-4 4-7 4-11 0 2 2 3 3 4 1.5 1.5 3 3.5 3 7a4 4 0 0 1-4 6z",
+ chevR:"M9 6l6 6-6 6",chevD:"M6 9l6 6 6-6",chevU:"M18 15l-6-6-6 6",
+ sun:"M12 3V1M12 23v-2M4.2 4.2 2.8 2.8M21.2 21.2 19.8 19.8M3 12H1M23 12h-2M4.2 19.8 2.8 21.2M21.2 2.8 19.8 4.2",
+ moon:"M21 12.8A8 8 0 1 1 11.2 3 6.3 6.3 0 0 0 21 12.8z",set:"M5 8h9M18 8h1M5 16h1M10 16h9M14 6v4M8 14v4",
+ search:"M11 4a7 7 0 1 0 0 14 7 7 0 0 0 0-14zM20 20l-3.5-3.5",tag:"M3 12l8.5-8.5a2 2 0 0 1 2.8 0l5.2 5.2a2 2 0 0 1 0 2.8L11 20z M7.5 8h.01",
+ cal:"M5 5h14v15H5zM5 9h14M9 3v4M15 3v4",trash:"M5 7h14M10 7V4h4v3M6 7l1 13h10l1-13",
+ expand:"M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5",share:"M12 16V4M8 8l4-4 4 4M5 12v8h14v-8",
+ download:"M12 4v12M8 12l4 4 4-4M5 20h14",edit:"M4 20h4L20 8l-4-4L4 16z",x:"M6 6l12 12M18 6L6 18",
+ target:"M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18zM12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8zM12 11.5a.5.5 0 1 0 0 1 .5.5 0 0 0 0-1z",
+ repeat:"M17 2l4 4-4 4M3 11v-1a4 4 0 0 1 4-4h14M7 22l-4-4 4-4M21 13v1a4 4 0 0 1-4 4H3",
+ flag:"M5 21V4M5 4h13l-3 4 3 4H5"};
+const ic=(n,a='')=>`<svg ${a} width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="${P[n]||''}"/></svg>`;
+
+/* grafici SVG hand-rolled */
+function ring(pct,size=72,sw=9,label=''){const r=(size-sw)/2,c=2*Math.PI*r,off=c*(1-clamp(pct,0,100)/100);
+ return `<div class="svgwrap" style="position:relative;width:${size}px;height:${size}px"><svg width="${size}" height="${size}" style="transform:rotate(-90deg)">
+  <circle cx="${size/2}" cy="${size/2}" r="${r}" fill="none" stroke="var(--surface-3)" stroke-width="${sw}"/>
+  <circle cx="${size/2}" cy="${size/2}" r="${r}" fill="none" stroke="var(--accent)" stroke-width="${sw}" stroke-linecap="round" stroke-dasharray="${c}" stroke-dashoffset="${off}"/></svg>
+  <div style="position:absolute;inset:0;display:grid;place-items:center;text-align:center"><div><div style="font-weight:800;font-size:${size*.26}px;line-height:1">${Math.round(pct)}<small style="font-size:.5em">%</small></div>${label?`<div class="eyebrow" style="font-size:8px">${label}</div>`:''}</div></div></div>`;}
+function donut(segs,size=130,center=''){const r=52,c=2*Math.PI*r,tot=segs.reduce((a,s)=>a+s.value,0)||1;let acc=0;
+ const arcs=segs.filter(s=>s.value>0).map(s=>{const f=s.value/tot,dash=f*c,rot=-90+acc*360;acc+=f;
+  return `<circle cx="70" cy="70" r="${r}" fill="none" stroke="${s.color}" stroke-width="20" stroke-dasharray="${dash} ${c}" transform="rotate(${rot} 70 70)"/>`;}).join('');
+ return `<svg viewBox="0 0 140 140" width="${size}" height="${size}"><circle cx="70" cy="70" r="${r}" fill="none" stroke="var(--surface-3)" stroke-width="20"/>${arcs}
+  ${center?`<text x="70" y="66" text-anchor="middle" font-family="'JetBrains Mono',monospace" font-size="9" fill="var(--text-muted)">${center.k||''}</text><text x="70" y="84" text-anchor="middle" font-weight="800" font-size="17" fill="var(--text)">${center.v||''}</text>`:''}</svg>`;}
+function bars(items,h=120){const max=Math.max(...items.map(i=>i.value),1);
+ return `<div class="barchart" style="height:${h}px">${items.map(it=>{const pct=it.value>0?Math.max(8,Math.round(it.value/max*100)):0;
+  return `<div class="barcol"><div class="bartrack"><div class="bar ${it.dim?'dim':''}" style="height:${pct}%${it.color?';background:'+it.color:''}"></div></div><span class="bl">${it.label}</span></div>`;}).join('')}</div>`;}
+function weekHeat(vals){return `<div class="weekheat">${vals.map(v=>`<i style="opacity:${0.16+clamp(v,0,1)*0.84}"></i>`).join('')}</div><div class="heatlabels">${(LANG==='it'?DOW:DOWen).map(x=>`<span>${x[0].toUpperCase()}</span>`).join('')}</div>`;}
+const catVar=name=>`var(--cat-${(DB.cats().includes(name)?name:'_')})`;
+
+/* ===================== [JS-2] STORE (localStorage) ===================== */
+const SCHEMA=1;
+const LS={get(k,f){try{const v=localStorage.getItem('argo.'+k);return v==null?f:JSON.parse(v);}catch(e){return f;}},
+ set(k,v){try{localStorage.setItem('argo.'+k,JSON.stringify(v));}catch(e){}},
+ del(k){try{localStorage.removeItem('argo.'+k);}catch(e){}}};
+
+function migrate(){const v=LS.get('schema',0);
+ if(v<1){/* prima installazione o legacy → normalizza */ LS.set('schema',SCHEMA);} }
+
+const DEFAULT_CATS=['Spesa','Cibo','Trasporti','Casa','Svago','Varie'];
+const PAYMENTS=['Cash','PayPal','Revolut','Carta','Bancomat'];
+
+const DB={
+ goals:()=>LS.get('goals',[]), notes:()=>LS.get('notes',[]), expenses:()=>LS.get('expenses',[]),
+ cats:()=>LS.get('cats',DEFAULT_CATS), settings:()=>LS.get('settings',{}), routines:()=>LS.get('routines',[]),
+ saveGoals(a){LS.set('goals',a);Cloud.push('goals',a);}, saveNotes(a){LS.set('notes',a);Cloud.push('notes',a);},
+ saveExpenses(a){LS.set('expenses',a);Cloud.push('expenses',a);}, saveCats(a){LS.set('cats',a);},
+ saveSettings(o){LS.set('settings',o);}, saveRoutines(a){LS.set('routines',a);},
+ wipe(){['goals','notes','expenses','cats','routines','seeded'].forEach(LS.del);} };
+
+function seedIfEmpty(){ /* Nessun dato demo: l'app parte vuota, pronta per i tuoi dati reali. */ }
+
+/* ===================== ROUTINE (ricorrenza obiettivi) =====================
+   Le routine sono i template ricorrenti; ogni giorno/settimana previsto
+   generano da sole l'istanza obiettivo collegata via routineId. lastRun
+   evita doppioni e impedisce che un'istanza cancellata oggi risorga.        */
+function instFromRoutine(r,extra){return Object.assign({id:uid(),title:r.title,done:false,completedAt:null,
+  createdAt:Date.now(),routineId:r.id,subtasks:(r.subtasks||[]).map(s=>({id:uid(),title:s.title,done:false}))},extra);}
+function materializeRoutines(){
+ const today=todayStr(), dow=(parseYmd(today).getDay()+6)%7, wk=weekKey(today);
+ const routines=DB.routines(); if(!routines.length)return;
+ const goals=DB.goals(); let changed=false;
+ routines.forEach(r=>{
+  if(!r.active)return;
+  if(r.type==='weekly'){
+   if(r.lastRun===wk)return;
+   goals.push(instFromRoutine(r,{type:'weekly',weekOf:wk,order:goals.filter(g=>g.type==='weekly'&&g.weekOf===wk).length}));
+   r.lastRun=wk; changed=true;
+  }else{
+   if(r.lastRun===today)return;
+   const days=(r.days&&r.days.length)?r.days:[0,1,2,3,4,5,6];
+   if(!days.includes(dow))return;
+   goals.push(instFromRoutine(r,{type:'daily',date:today,order:goals.filter(g=>g.type==='daily'&&g.date===today).length}));
+   r.lastRun=today; changed=true;
+  }
+ });
+ if(changed){DB.saveRoutines(routines);DB.saveGoals(goals);}
+}
+function freqLabel(r){
+ if(r.type==='weekly')return T('ogniSett');
+ const d=r.days||[];
+ if(d.length>=7)return T('tuttiGiorni');
+ if(d.length===5&&[0,1,2,3,4].every(x=>d.includes(x)))return T('feriali');
+ if(d.length===2&&d.includes(5)&&d.includes(6))return T('weekendF');
+ const names=(LANG==='it'?DOW:DOWen);
+ return d.slice().sort((a,b)=>a-b).map(i=>names[i][0].toUpperCase()).join(' ')||T('frequenza');
+}
+/* Carry-over: COPIA (non sposta) gli obiettivi NON di routine rimasti incompleti
+   dal giorno precedente più recente (entro 14gg) a oggi, marcando la sorgente
+   `carried` per non duplicarla. Ieri resta onesto → streak/lacune intatte.       */
+function carryOverGoals(){
+ if(!DB.settings().carryOver)return;
+ const today=todayStr(), goals=DB.goals();
+ let src=null;
+ for(let i=1;i<=14;i++){const ds=ymd(addDays(parseYmd(today),-i));if(goals.some(g=>g.type==='daily'&&g.date===ds)){src=ds;break;}}
+ if(!src)return;
+ const pending=goals.filter(g=>g.type==='daily'&&g.date===src&&!g.routineId&&!g.carried&&!goalComplete(g));
+ let changed=false;
+ pending.forEach(g=>{
+  if(!goals.some(x=>x.carriedFrom===g.id)){
+   goals.push({id:uid(),type:'daily',date:today,title:g.title,done:false,completedAt:null,
+    order:goals.filter(x=>x.type==='daily'&&x.date===today).length,createdAt:Date.now(),carriedFrom:g.id,
+    subtasks:(g.subtasks||[]).map(s=>({id:uid(),title:s.title,done:s.done}))});
+  }
+  g.carried=true;changed=true;
+ });
+ if(changed)DB.saveGoals(goals);
+}
+
+/* =================== [JS-3] Firestore adapter (gated) [FB] ===================
+   Attivo SOLO se l'utente incolla la config (Impostazioni → Firebase).
+   - offline persistence ON (cache locale + sync realtime via onSnapshot)
+   - dati sotto users/{uid}/{coll}; rules bloccate all'UID proprietario.
+   Quando non configurato, l'app è 100% locale: tutto funziona offline.        */
+const Cloud={
+ app:null,auth:null,fs:null,uid:null,ready:false,unsub:[],
+ cfg(){return DB.settings().firebase||null;},
+ async init(){const cfg=this.cfg();if(!cfg||!cfg.apiKey)return;
+  try{
+   const[{initializeApp},{getAuth,onAuthStateChanged,signInWithEmailAndPassword,signOut},
+    {initializeFirestore,persistentLocalCache,persistentMultipleTabManager,collection,onSnapshot,doc,setDoc,deleteDoc,writeBatch}]=await Promise.all([
+    import('https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js'),
+    import('https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js'),
+    import('https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js')]);
+   this.app=initializeApp(cfg);this.auth=getAuth(this.app);
+   this.fs=initializeFirestore(this.app,{localCache:persistentLocalCache({tabManager:persistentMultipleTabManager()})});
+   this._api={collection,onSnapshot,doc,setDoc,deleteDoc,writeBatch,signInWithEmailAndPassword,signOut};
+   onAuthStateChanged(this.auth,u=>{this.uid=u?u.uid:null;this.ready=!!u;this.bind();setSync(u?'on':'off');});
+  }catch(e){console.warn('Firebase init fallita',e);setSync('off');}
+ },
+ async signIn(email,pw){if(!this.auth)await this.init();return this._api.signInWithEmailAndPassword(this.auth,email,pw);},
+ async signOutNow(){this.unbind();if(this.auth)await this._api.signOut(this.auth);this.uid=null;this.ready=false;setSync(null);},
+ bind(){this.unbind();if(!this.ready)return;const {collection,onSnapshot}=this._api;
+  ['goals','notes','expenses'].forEach(c=>{const ref=collection(this.fs,'users',this.uid,c);
+   this.unsub.push(onSnapshot(ref,snap=>{const arr=[];snap.forEach(d=>arr.push(d.data()));
+    LS.set(c,arr);if(state.tab)render();},err=>console.warn(c,err)));});},
+ unbind(){this.unsub.forEach(u=>{try{u();}catch(e){}});this.unsub=[];},
+ async push(coll,arr){ if(!this.ready||!this.uid)return; const {doc,setDoc}=this._api;
+  try{for(const o of arr){await setDoc(doc(this.fs,'users',this.uid,coll,o.id),o);} }catch(e){/* offline: la cache Firestore riproverà */} }
+};
+
+/* ===================== [JS-4] STATO + DERIVE ===================== */
+const state={tab:'home', noteSearch:'', noteTag:'', expandGoals:{} };
+
+function goalDoneRatio(g){if(g.subtasks&&g.subtasks.length){const d=g.subtasks.filter(s=>s.done).length;return[d,g.subtasks.length];}return[g.done?1:0,1];}
+function goalComplete(g){if(g.subtasks&&g.subtasks.length)return g.subtasks.every(s=>s.done);return!!g.done;}
+function dailyOf(date){return DB.goals().filter(g=>g.type==='daily'&&g.date===date).sort((a,b)=>a.order-b.order);}
+function weeklyOf(wk){return DB.goals().filter(g=>g.type==='weekly'&&g.weekOf===wk).sort((a,b)=>a.order-b.order);}
+function longGoals(){return DB.goals().filter(g=>g.type==='long').sort((a,b)=>(a.due||'9999-99-99').localeCompare(b.due||'9999-99-99')||a.order-b.order);}
+function endOfPeriod(h){const now=new Date(),y=now.getFullYear(),m=now.getMonth();
+ if(h==='quarter')return ymd(new Date(y,Math.floor(m/3)*3+3,0));
+ if(h==='semester')return ymd(new Date(y,m<6?6:12,0));
+ if(h==='year')return ymd(new Date(y,12,0));
+ return todayStr();}
+function shortDate(s){const d=parseYmd(s),mon=(LANG==='it'?MON:['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']);
+ return d.getDate()+' '+mon[d.getMonth()].slice(0,3)+(d.getFullYear()!==new Date().getFullYear()?' '+d.getFullYear():'');}
+function horizonLabel(g){if(g.horizon==='date')return T('scadeIl')+' '+(g.due?shortDate(g.due):'');
+ const d=g.due?parseYmd(g.due):new Date(),m=d.getMonth(),y=d.getFullYear();
+ if(g.horizon==='quarter')return 'Q'+(Math.floor(m/3)+1)+' '+y;
+ if(g.horizon==='semester')return LANG==='it'?(m<6?'1° sem ':'2° sem ')+y:'H'+(m<6?1:2)+' '+y;
+ if(g.horizon==='year')return ''+y;return '';}
+function dayCompletion(date){const a=dailyOf(date);if(!a.length)return null;return a.filter(goalComplete).length/a.length;}
+function streak(){let s=0,d=new Date();for(let i=0;i<400;i++){const c=dayCompletion(ymd(d));if(c===null)break;if(c>=1)s++;else break;d=addDays(d,-1);}return s;}
+function last7(){const out=[];for(let i=6;i>=0;i--){const ds=ymd(addDays(new Date(),-i));const c=dayCompletion(ds);out.push({label:(LANG==='it'?DOW:DOWen)[(parseYmd(ds).getDay()+6)%7][0].toUpperCase(),value:c==null?0:c,dim:c==null||c<0.5});}return out;}
+function completedPerDay(n){const out=[];for(let i=n-1;i>=0;i--){const ds=ymd(addDays(new Date(),-i));
+  const c=dailyOf(ds).reduce((acc,g)=>acc+((g.subtasks&&g.subtasks.length)?g.subtasks.filter(s=>s.done).length:(g.done?1:0)),0);
+  out.push({label:(LANG==='it'?DOW:DOWen)[(parseYmd(ds).getDay()+6)%7][0].toUpperCase(),value:c});}return out;}
+function emptyDaysThisMonth(){const now=new Date(),y=now.getFullYear(),m=now.getMonth();let n=0;
+ for(let d=1;d<=now.getDate();d++){const ds=ymd(new Date(y,m,d));const hasGoals=dailyOf(ds).length>0;
+  const hasExp=DB.expenses().some(e=>e.date===ds);const hasNote=DB.notes().some(nt=>ymd(new Date(nt.createdAt))===ds);
+  if(!hasGoals&&!hasExp&&!hasNote)n++;}return n;}
+function recurringGaps(){const map={};const days=30;
+ for(let i=0;i<days;i++){const ds=ymd(addDays(new Date(),-i));dailyOf(ds).forEach(g=>{const k=g.title.trim().toLowerCase();
+  (map[k]=map[k]||{title:g.title,seen:0,missed:0}); map[k].seen++; if(!goalComplete(g))map[k].missed++;});}
+ return Object.values(map).filter(x=>x.seen>=3&&x.missed>=2).sort((a,b)=>b.missed-a.missed).slice(0,4);}
+function monthExpenses(){const now=new Date(),p=now.getFullYear()+'-'+pad(now.getMonth()+1);return DB.expenses().filter(e=>e.date.startsWith(p));}
+function spendByCat(list){const m={};DB.cats().forEach(c=>m[c]=0);list.forEach(e=>{m[e.category]=(m[e.category]||0)+Number(e.amount);});return m;}
+
+/* ===================== [JS-5] RENDER ===================== */
+const NAVITEMS=[['home','home'],['storico','dash'],['spese','exp'],['note','note']];
+function renderNav(){$('#nav').innerHTML=
+  `<button data-act="tab" data-tab="home" class="${state.tab==='home'?'on':''}">${ic('home')}<span>${T('home')}</span></button>
+   <button data-act="tab" data-tab="storico" class="${state.tab==='storico'?'on':''}">${ic('dash')}<span>${T('storico')}</span></button>
+   <button class="fab" data-act="quick-add" aria-label="Aggiungi">${ic('plus')}</button>
+   <button data-act="tab" data-tab="spese" class="${state.tab==='spese'?'on':''}">${ic('exp')}<span>${T('spese')}</span></button>
+   <button data-act="tab" data-tab="note" class="${state.tab==='note'?'on':''}">${ic('note')}<span>${T('note')}</span></button>`;}
+
+function render(){
+ renderNav();
+ $('#headTitle').textContent = T(state.tab==='home'?'home':state.tab);
+ const v=$('#view');
+ if(state.tab==='home')v.innerHTML=renderHome();
+ else if(state.tab==='storico')v.innerHTML=renderStorico();
+ else if(state.tab==='spese')v.innerHTML=renderSpese();
+ else if(state.tab==='note')v.innerHTML=renderNote();
+}
+
+function checkbox(on,cls=''){return `<span class="check ${on?'on':''} ${cls}">${ic('check')}</span>`;}
+
+function renderHome(){
+ const t=todayStr(),wk=weekKey(t);
+ const daily=dailyOf(t), weekly=weeklyOf(wk);
+ const done=daily.filter(goalComplete).length;
+ const pct=daily.length?done/daily.length*100:0;
+ return `<section>
+  <div class="dayhead">
+   ${ring(pct,68,9)}
+   <div class="grow"><div class="eyebrow">${prettyDate(t)}</div>
+    <div style="font-size:18px;font-weight:800;letter-spacing:-.01em">${done}/${daily.length} ${T('fatto')}</div>
+    ${streak()>0?`<div class="row" style="gap:6px;color:var(--accent-2);font-weight:600;font-size:13px;margin-top:2px">${ic('flame')} ${streak()} ${LANG==='it'?'giorni di fila':'day streak'}</div>`:''}</div>
+   <button class="iconaction" data-act="focus-mode" title="${T('modalitaOggi')}" style="width:38px;height:38px;background:var(--accent);color:#fff;border-radius:12px">${ic('expand')}</button>
+  </div>
+
+  ${weekly.length?`<div class="weekstrip">${weekly.map(g=>{const[d,tot]=goalDoneRatio(g);return `<div class="weekchip" data-act="open-weekly" data-id="${g.id}">
+    <div class="eyebrow" style="font-size:8px">${T('settimana')}</div>
+    <div class="ell" style="font-weight:600;font-size:13px;margin:2px 0 7px">${esc(g.title)}</div>
+    <div class="progressbar"><i style="width:${tot?d/tot*100:0}%"></i></div></div>`;}).join('')}
+    <div class="weekchip" data-act="add-weekly" style="display:grid;place-items:center;color:var(--text-subtle);cursor:pointer">${ic('plus')}</div></div>`:''}
+
+  <h2 class="sec">${T('obiettiviGiorno')} <span class="eyebrow">${done}/${daily.length}</span></h2>
+  <div class="card" style="padding:4px 12px">
+   <div class="glist">
+    ${daily.length?daily.map((g,i)=>renderGoalRow(g,i,daily.length)).join(''):`<div class="empty" style="padding:24px">${ic('target')}<div>${T('nessunObiettivo')}</div></div>`}
+    <div class="addrow"><span class="plusico">${ic('plus')}</span>
+     <input data-act="add-goal-input" data-type="daily" placeholder="${T('aggiungiObiettivo')}" autocomplete="off"></div>
+   </div>
+  </div>
+  ${weekly.length?`<h2 class="sec">${T('obiettiviSett')}</h2><div class="card" style="padding:4px 12px"><div class="glist">
+    ${weekly.map((g,i)=>renderGoalRow(g,i,weekly.length)).join('')}
+    <div class="addrow"><span class="plusico">${ic('plus')}</span><input data-act="add-goal-input" data-type="weekly" placeholder="${T('aggiungiObiettivo')}" autocomplete="off"></div></div></div>`:''}
+  ${(()=>{const long=longGoals();return `<h2 class="sec">${ic('flag')} ${T('lungoTermine')}</h2>
+   <div class="card" style="padding:4px 12px"><div class="glist">
+    ${long.map((g,i)=>renderGoalRow(g,i,long.length)).join('')}
+    <div class="addrow" data-act="add-long"><span class="plusico">${ic('plus')}</span><span class="muted">${T('aggiungiTraguardo')}</span></div></div></div>`;})()}
+ </section>`;
+}
+function renderGoalRow(g,i,total){
+ const[d,tot]=goalDoneRatio(g),comp=goalComplete(g),exp=state.expandGoals[g.id],hasSub=g.subtasks&&g.subtasks.length;
+ const isRecur=g.routineId&&DB.routines().some(r=>r.id===g.routineId),isLong=g.type==='long';
+ const overdue=isLong&&g.due&&g.due<todayStr()&&!comp;
+ return `<div class="goalwrap ${comp?'done':''}" data-goal="${g.id}">
+  <div class="goalrow">
+   <span class="check ${comp?'on':''}" data-act="toggle-goal" data-id="${g.id}">${ic('check')}</span>
+   <span class="grow t strikeable" data-act="toggle-goal" data-id="${g.id}">${esc(g.title)}</span>
+   ${g.carriedFrom?`<span class="subtle mono" title="${T('riportato')}" style="font-size:12px;flex:0 0 auto">↩</span>`:''}
+   ${isLong?`<span class="pill ${overdue?'bad':'accent'}">${overdue?T('scaduto'):horizonLabel(g)}</span>`:''}
+   ${hasSub?`<span class="pill ${d===tot?'ok':''}">${d}/${tot}</span>`:''}
+   <button class="iconaction" data-act="expand-goal" data-id="${g.id}" title="${T('sottoTask')}">${ic(hasSub?(exp?'chevU':'chevD'):'plus')}</button>
+   <div class="reord"><button data-act="move-goal" data-id="${g.id}" data-dir="-1" ${i===0?'disabled':''}>${ic('chevU')}</button><button data-act="move-goal" data-id="${g.id}" data-dir="1" ${i===total-1?'disabled':''}>${ic('chevD')}</button></div>
+   ${isLong?`<button class="iconaction" data-act="edit-long" data-id="${g.id}" title="${T('modifica')}">${ic('edit')}</button>`:`<button class="iconaction" data-act="recur-goal" data-id="${g.id}" title="${T('rendiRicorrente')}"${isRecur?' style="color:var(--accent)"':''}>${ic('repeat')}</button>`}
+   <button class="iconaction" data-act="del-goal" data-id="${g.id}">${ic('trash')}</button>
+  </div>
+  ${exp?`<div class="subwrap">${(g.subtasks||[]).map(s=>`<div class="subrow ${s.done?'done':''}">
+    <span class="check sm ${s.done?'on':''}" data-act="toggle-sub" data-id="${g.id}" data-sid="${s.id}">${ic('check')}</span>
+    <span class="grow t strikeable" data-act="toggle-sub" data-id="${g.id}" data-sid="${s.id}">${esc(s.title)}</span>
+    <button class="iconaction" data-act="del-sub" data-id="${g.id}" data-sid="${s.id}">${ic('x')}</button></div>`).join('')}
+    <div class="subrow" style="padding-left:36px"><span class="plusico" style="width:19px;height:19px">${ic('plus')}</span>
+     <input data-act="add-sub-input" data-id="${g.id}" placeholder="${T('aggiungiSotto')}" autocomplete="off" style="border:0;background:none;outline:none;font-size:13.5px;color:var(--text);width:100%"></div></div>`:''}
+ </div>`;
+}
+
+function renderStorico(){
+ const t=todayStr(),wk=weekKey(t);
+ const cOggi=dayCompletion(t), week=weeklyOf(wk);
+ // settimana: media completamento ultimi 7 giorni con obiettivi
+ const l7=last7();const wv=l7.filter(x=>x.value>0||!x.dim);const wkAvg=(()=>{let s=0,n=0;for(let i=0;i<7;i++){const ds=ymd(addDays(new Date(),-i));const c=dayCompletion(ds);if(c!=null){s+=c;n++;}}return n?s/n:0;})();
+ const mExp=monthExpenses(),mTot=mExp.reduce((a,e)=>a+Number(e.amount),0);
+ const budget=DB.settings().budget||400;
+ const byCat=spendByCat(mExp);
+ const segs=DB.cats().map(c=>({value:byCat[c]||0,color:catVar(c),name:c})).filter(s=>s.value>0);
+ const gaps=recurringGaps();
+ return `<section>
+  <div class="kpi">
+   <div class="card"><div class="stat"><div class="v">${cOggi==null?'—':Math.round(cOggi*100)+'%'}</div><div class="k">${T('completOggi')}</div></div></div>
+   <div class="card"><div class="stat"><div class="v">${Math.round(wkAvg*100)}<small>%</small></div><div class="k">${T('completSett')}</div></div></div>
+   <div class="card"><div class="stat"><div class="v" style="color:var(--accent-2)">${streak()}</div><div class="k">${T('streak')}</div></div></div>
+   <div class="card"><div class="stat"><div class="v" style="font-size:19px">${eur(mTot)}</div><div class="k">${T('speseMese')}</div></div></div>
+  </div>
+  <div class="grid">
+   <div class="card widget span2"><h4>${ic('dash')} ${T('completamento')} <span class="eyebrow">7${LANG==='it'?'gg':'d'}</span></h4>${bars(l7,120)}</div>
+   <div class="card widget"><h4>${ic('exp')} ${T('perCategoria')}</h4>${segs.length?`<div class="svgwrap">${donut(segs,118,{k:'MESE',v:eur(mTot).replace(',00','')})}</div>`:`<div class="empty" style="padding:14px">${ic('exp')}</div>`}</div>
+   <div class="card widget"><h4>${ic('flame')} ${T('attivita')}</h4>${weekHeat(l7.map(x=>x.value))}<div class="eyebrow" style="margin-top:10px">${emptyDaysThisMonth()} ${T('giorniVuoti')}</div></div>
+   <div class="card widget span2"><h4>${ic('exp')} ${T('budget')}</h4>
+    <div class="row"><div class="stat"><div class="v">${eur(mTot)}</div><div class="k">${LANG==='it'?'su':'of'} ${eur(budget)}</div></div>
+     <div class="grow"><div class="progressbar" style="height:10px"><i style="width:${clamp(mTot/budget*100,0,100)}%;background:${mTot>budget?'var(--bad)':'linear-gradient(90deg,var(--accent),var(--accent-2))'}"></i></div></div></div></div>
+   ${segs.length?`<div class="card widget span2"><h4>${T('perCategoria')}</h4><div class="legend">${segs.map(s=>`<div class="li"><span class="sw" style="background:${s.color}"></span>${esc(s.name)}<b>${eur(s.value)}</b></div>`).join('')}</div></div>`:''}
+   <div class="card widget span2"><h4>${ic('target')} ${T('lacune')}</h4>
+    ${gaps.length?gaps.map(g=>`<div class="row" style="padding:7px 0;border-bottom:1px solid var(--border-subtle)"><span class="grow ell">${esc(g.title)}</span><span class="pill bad">${g.missed} ${LANG==='it'?'su':'/'} ${g.seen}</span></div>`).join(''):`<div class="muted" style="font-size:13px;padding:6px 0">${T('nessunaLacuna')} ✦</div>`}</div>
+  </div>
+ </section>`;
+}
+
+function renderSpese(){
+ const list=DB.expenses().slice().sort((a,b)=>b.date.localeCompare(a.date)||b.createdAt-a.createdAt);
+ const groups={};list.forEach(e=>{(groups[e.date]=groups[e.date]||[]).push(e);});
+ const mTot=monthExpenses().reduce((a,e)=>a+Number(e.amount),0);
+ return `<section>
+  <button class="btn" data-act="quick-expense" style="margin-bottom:6px">${ic('plus')} ${T('nuovaSpesa')}</button>
+  <h2 class="sec">${T('recenti')} <span class="eyebrow">${eur(mTot)} ${LANG==='it'?'questo mese':'this month'}</span></h2>
+  <div class="card" style="padding:4px 14px">
+   ${list.length?Object.keys(groups).map(date=>`<div class="daygroup">${prettyDate(date)} <b>${eur(groups[date].reduce((a,e)=>a+Number(e.amount),0))}</b></div>
+     ${groups[date].map(e=>`<div class="listitem">
+      <span class="iconmini" style="background:color-mix(in srgb,${catVar(e.category)} 18%,transparent);color:${catVar(e.category)}">${ic('exp')}</span>
+      <div class="grow"><div style="font-weight:600">${esc(e.note||e.category)}</div><div class="eyebrow">${esc(e.category)}${e.method?' · '+esc(e.method):''}</div></div>
+      <div class="amount">${eur(e.amount)}</div>
+      <button class="iconaction" data-act="del-expense" data-id="${e.id}">${ic('trash')}</button></div>`).join('')}`).join('')
+    :`<div class="empty">${ic('exp')}<div>${T('nessunaSpesa')}</div></div>`}
+  </div>
+ </section>`;
+}
+
+function renderNote(){
+ let list=DB.notes().slice().sort((a,b)=>b.updatedAt-a.updatedAt);
+ const allTags=[...new Set(DB.notes().flatMap(n=>n.tags||[]))];
+ if(state.noteTag)list=list.filter(n=>(n.tags||[]).includes(state.noteTag));
+ if(state.noteSearch){const q=state.noteSearch.toLowerCase();list=list.filter(n=>(n.title+' '+n.body+' '+(n.tags||[]).join(' ')).toLowerCase().includes(q));}
+ return `<section>
+  <button class="btn" data-act="quick-note" style="margin-bottom:10px">${ic('plus')} ${T('nuovaNota')}</button>
+  <div class="searchbar">${ic('search')}<input data-act="note-search" placeholder="${T('cerca')}" value="${esc(state.noteSearch)}"></div>
+  ${allTags.length?`<div class="tagfilter"><span class="chip ${!state.noteTag?'on':''}" data-act="note-tag" data-tag="">${T('tutte')}</span>${allTags.map(tg=>`<span class="chip ${state.noteTag===tg?'on':''}" data-act="note-tag" data-tag="${esc(tg)}">#${esc(tg)}</span>`).join('')}</div>`:''}
+  ${list.length?list.map(n=>`<div class="card lift noteitem" data-act="edit-note" data-id="${n.id}">
+    <div class="row"><b class="grow ell">${esc(n.title||'(senza titolo)')}</b><span class="eyebrow">${relTime(n.updatedAt)}</span></div>
+    ${n.body?`<div class="muted" style="font-size:13.5px;margin:5px 0 8px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden">${esc(n.body)}</div>`:''}
+    ${(n.tags||[]).length?`<div class="row" style="gap:6px;flex-wrap:wrap">${n.tags.map(tg=>`<span class="tag">#${esc(tg)}</span>`).join('')}</div>`:''}</div>`).join('')
+   :`<div class="empty">${ic('note')}<div>${T('nessunaNota')}</div></div>`}
+ </section>`;
+}
+
+/* ===================== [JS-6] AZIONI (event-delegation) ===================== */
+function findGoal(id){return DB.goals().find(g=>g.id===id);}
+function withGoals(fn){const a=DB.goals();fn(a);DB.saveGoals(a);render();}
+
+document.addEventListener('click',e=>{
+ const el=e.target.closest('[data-act]');if(!el)return;
+ const act=el.dataset.act,id=el.dataset.id;
+ switch(act){
+  case 'tab': state.tab=el.dataset.tab; render(); $('#view').scrollTo(0,0); window.scrollTo(0,0); break;
+  case 'toggle-theme': setTheme(document.documentElement.getAttribute('data-theme')==='dark'?'light':'dark'); break;
+  case 'toggle-goal': withGoals(a=>{const g=a.find(x=>x.id===id);if(!g)return;
+    if(g.subtasks&&g.subtasks.length){const all=g.subtasks.every(s=>s.done);g.subtasks.forEach(s=>s.done=!all);g.done=!all;}
+    else g.done=!g.done; g.completedAt=goalComplete(g)?Date.now():null;}); break;
+  case 'toggle-sub': withGoals(a=>{const g=a.find(x=>x.id===id);if(!g)return;const s=g.subtasks.find(x=>x.id===el.dataset.sid);if(s)s.done=!s.done;
+    g.done=g.subtasks.every(x=>x.done);g.completedAt=goalComplete(g)?Date.now():null;}); break;
+  case 'expand-goal': state.expandGoals[id]=!state.expandGoals[id]; render(); break;
+  case 'del-goal': withGoals(a=>{const i=a.findIndex(x=>x.id===id);if(i>=0)a.splice(i,1);}); break;
+  case 'del-sub': withGoals(a=>{const g=a.find(x=>x.id===id);if(g)g.subtasks=g.subtasks.filter(s=>s.id!==el.dataset.sid);}); break;
+  case 'move-goal': { const dir=+el.dataset.dir; const g=findGoal(id); if(!g)break;
+    const sib=(g.type==='daily'?dailyOf(g.date):g.type==='long'?longGoals():weeklyOf(g.weekOf)); const idx=sib.findIndex(x=>x.id===id); const j=idx+dir;
+    if(j<0||j>=sib.length)break; withGoals(a=>{const A=a.find(x=>x.id===sib[idx].id),B=a.find(x=>x.id===sib[j].id);const o=A.order;A.order=B.order;B.order=o;}); break; }
+  case 'del-expense': { const a=DB.expenses().filter(x=>x.id!==id);DB.saveExpenses(a);render(); break; }
+  case 'recur-goal': { const g=findGoal(id); if(!g)break; const r=g.routineId&&DB.routines().find(x=>x.id===g.routineId);
+    openRoutineSheet(r?{routine:r}:{fromGoal:g}); break; }
+  case 'open-routines': openRoutines(); break;
+  case 'add-long': openLongGoalSheet(); break;
+  case 'edit-long': { const g=findGoal(id); if(g)openLongGoalSheet(g); break; }
+  case 'quick-add': openQuickAdd(); break;
+  case 'quick-expense': openExpenseSheet(); break;
+  case 'quick-note': openNoteSheet(); break;
+  case 'edit-note': openNoteSheet(DB.notes().find(n=>n.id===id)); break;
+  case 'note-tag': state.noteTag=el.dataset.tag; render(); break;
+  case 'add-weekly': case 'open-weekly': { const g=findGoal(id); openGoalSheet(g||{type:'weekly'}); break; }
+  case 'focus-mode': openFocus(); break;
+  case 'open-settings': openSettings(); break;
+  case 'open-export': openExport(); break;
+  case 'close-sheet': closeSheet(); break;
+ }
+});
+/* input handlers */
+document.addEventListener('keydown',e=>{
+ const el=e.target.closest('[data-act]');if(!el||e.key!=='Enter')return;
+ if(el.dataset.act==='add-goal-input'){const v=el.value.trim();if(!v)return;addGoal(el.dataset.type,v);el.value='';}
+ if(el.dataset.act==='add-sub-input'){const v=el.value.trim();if(!v)return;addSub(el.dataset.id,v);}
+});
+document.addEventListener('input',e=>{
+ const el=e.target.closest('[data-act]');if(!el)return;
+ if(el.dataset.act==='note-search'){state.noteSearch=el.value;const list=$('#view');/* re-render solo lista */ render();
+   const inp=$('[data-act="note-search"]');if(inp){inp.focus();inp.setSelectionRange(el.value.length,el.value.length);} }
+});
+
+function addGoal(type,title){const a=DB.goals();const t=todayStr();
+ const sib=type==='daily'?dailyOf(t):weeklyOf(weekKey(t));
+ const g={id:uid(),type,title,done:false,order:sib.length,createdAt:Date.now(),completedAt:null,subtasks:[]};
+ if(type==='daily')g.date=t;else g.weekOf=weekKey(t);
+ a.push(g);DB.saveGoals(a);render();
+ const inp=$(`[data-act="add-goal-input"][data-type="${type}"]`);if(inp)inp.focus();}
+function addSub(goalId,title){withGoals(a=>{const g=a.find(x=>x.id===goalId);if(!g)return;g.subtasks=g.subtasks||[];g.subtasks.push({id:uid(),title,done:false});g.done=false;});
+ state.expandGoals[goalId]=true;render();const inp=$(`[data-act="add-sub-input"][data-id="${goalId}"]`);if(inp)inp.focus();}
+
+/* ===================== SHEETS ===================== */
+function openSheet(title,html){$('#sheetTitle').textContent=title;$('#sheetBody').innerHTML=html;
+ $('#sheet').classList.add('on');$('#scrim').classList.add('on');}
+function closeSheet(){$('#sheet').classList.remove('on');$('#scrim').classList.remove('on');}
+$('#scrim').addEventListener('click',()=>{closeSheet();closeFocus();});
+
+function openQuickAdd(){openSheet(T('menuRapido'),`<div class="col" style="gap:10px">
+  <button class="btn ghost" data-act="qa-goal">${ic('target')} ${T('obiettivo')}</button>
+  <button class="btn ghost" data-act="qa-long">${ic('flag')} ${T('traguardo')}</button>
+  <button class="btn ghost" data-act="qa-routine">${ic('repeat')} ${T('routine')}</button>
+  <button class="btn ghost" data-act="qa-note">${ic('note')} ${T('note')}</button>
+  <button class="btn ghost" data-act="qa-exp">${ic('exp')} ${T('spesa')}</button></div>`);
+ $('[data-act="qa-goal"]').onclick=()=>{closeSheet();state.tab='home';render();setTimeout(()=>{const i=$('[data-act="add-goal-input"][data-type="daily"]');if(i)i.focus();},50);};
+ $('[data-act="qa-long"]').onclick=()=>{closeSheet();openLongGoalSheet();};
+ $('[data-act="qa-routine"]').onclick=()=>{closeSheet();openRoutines();};
+ $('[data-act="qa-note"]').onclick=()=>{closeSheet();openNoteSheet();};
+ $('[data-act="qa-exp"]').onclick=()=>{closeSheet();openExpenseSheet();};}
+
+function openExpenseSheet(){
+ let amount='', cat=DB.cats()[0]||'Varie', note='', date=todayStr(), method=PAYMENTS[0];
+ const body=()=>`<div class="card" style="text-align:center;padding:14px;margin-bottom:12px;border:0;background:var(--surface-2)">
+   <div class="eyebrow">${T('importo')}</div><div class="amount" id="amtDisp" style="font-size:42px;margin-top:4px">€ ${amount||'0'}</div></div>
+  <div class="eyebrow" style="margin-bottom:7px">${T('categoria')}</div>
+  <div class="row" style="flex-wrap:wrap;gap:7px;margin-bottom:12px" id="catRow">
+   ${DB.cats().map(c=>`<span class="chip ${c===cat?'on':''}" data-cat="${esc(c)}"><span class="dot" style="background:${catVar(c)}"></span>${esc(c)}</span>`).join('')}</div>
+  <div class="eyebrow" style="margin-bottom:7px">${T('metodo')}</div>
+  <div class="row" style="flex-wrap:wrap;gap:7px;margin-bottom:12px" id="pmRow">
+   ${PAYMENTS.map(p=>`<span class="chip ${p===method?'on':''}" data-pm="${esc(p)}">${esc(p)}</span>`).join('')}</div>
+  <input class="field" id="expNote" placeholder="${T('nota')}" value="${esc(note)}" style="margin-bottom:10px">
+  <input class="field" id="expDate" type="date" value="${date}" style="margin-bottom:14px">
+  <div class="keypad" id="kp">${['1','2','3','4','5','6','7','8','9',',','0','⌫'].map(k=>`<button data-k="${k}">${k}</button>`).join('')}</div>
+  <button class="btn" id="saveExp" style="margin-top:12px">${ic('check')} ${T('salvaSpesa')}</button>`;
+ openSheet(T('nuovaSpesa'),body());
+ const disp=()=>{$('#amtDisp').textContent='€ '+(amount||'0');};
+ $('#kp').onclick=e=>{const b=e.target.closest('[data-k]');if(!b)return;const k=b.dataset.k;
+  if(k==='⌫')amount=amount.slice(0,-1);else if(k===','){if(!amount.includes(','))amount+=amount?',':'0,';}
+  else{if(amount.includes(',')&&amount.split(',')[1].length>=2)return;amount+=k;}disp();};
+ $('#catRow').onclick=e=>{const c=e.target.closest('[data-cat]');if(!c)return;cat=c.dataset.cat;
+  $$('#catRow .chip').forEach(x=>x.classList.toggle('on',x.dataset.cat===cat));};
+ $('#pmRow').onclick=e=>{const c=e.target.closest('[data-pm]');if(!c)return;method=c.dataset.pm;
+  $$('#pmRow .chip').forEach(x=>x.classList.toggle('on',x.dataset.pm===method));};
+ $('#expNote').oninput=e=>note=e.target.value; $('#expDate').oninput=e=>date=e.target.value;
+ $('#saveExp').onclick=()=>{const val=parseFloat((amount||'0').replace(',','.'));if(!val){toast('Inserisci un importo');return;}
+  const a=DB.expenses();a.push({id:uid(),amount:val,currency:'EUR',category:cat,method,note:note.trim(),date,createdAt:Date.now()});
+  DB.saveExpenses(a);closeSheet();state.tab='spese';render();toast('Spesa salvata ✓');};}
+
+function openNoteSheet(existing){
+ const n=existing||{title:'',body:'',tags:[]};let tags=(n.tags||[]).slice();
+ openSheet(existing?'Nota':T('nuovaNota'),`
+  <input class="field" id="nTitle" placeholder="${T('titoloOpz')}" value="${esc(n.title)}" style="font-weight:700;font-size:17px;margin-bottom:8px">
+  <textarea class="field" id="nBody" placeholder="${T('scriviQui')}" style="margin-bottom:10px">${esc(n.body)}</textarea>
+  <div class="row" style="flex-wrap:wrap;gap:7px;margin-bottom:12px" id="nTags"></div>
+  <input class="field" id="nTagInput" placeholder="+ ${T('tag')} (invio)" style="margin-bottom:14px">
+  <div class="row" style="gap:8px"><button class="btn" id="nSave">${ic('check')} ${T('salvaNota')}</button>
+   ${existing?`<button class="btn ghost danger" id="nDel" style="width:auto;color:#fff;background:var(--bad)">${ic('trash')}</button>`:''}</div>`);
+ const drawTags=()=>{$('#nTags').innerHTML=tags.map((t,i)=>`<span class="chip on" data-i="${i}">#${esc(t)} ✕</span>`).join('');
+  $$('#nTags .chip').forEach(c=>c.onclick=()=>{tags.splice(+c.dataset.i,1);drawTags();});};drawTags();
+ $('#nTagInput').onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();const v=e.target.value.trim().replace(/^#/,'');if(v&&!tags.includes(v))tags.push(v);e.target.value='';drawTags();}};
+ $('#nSave').onclick=()=>{const title=$('#nTitle').value.trim(),body=$('#nBody').value.trim();
+  if(!title&&!body){toast('Nota vuota');return;}const arr=DB.notes();
+  if(existing){const o=arr.find(x=>x.id===n.id);Object.assign(o,{title,body,tags,updatedAt:Date.now()});}
+  else arr.unshift({id:uid(),title,body,tags,createdAt:Date.now(),updatedAt:Date.now()});
+  DB.saveNotes(arr);closeSheet();state.tab='note';render();toast('Nota salvata ✓');};
+ if(existing)$('#nDel').onclick=()=>{DB.saveNotes(DB.notes().filter(x=>x.id!==n.id));closeSheet();render();toast('Nota eliminata');};}
+
+function openGoalSheet(g){ // weekly add/edit con sotto-task
+ const isNew=!g.id;const obj=isNew?{id:uid(),type:'weekly',title:'',weekOf:weekKey(todayStr()),done:false,order:weeklyOf(weekKey(todayStr())).length,createdAt:Date.now(),completedAt:null,subtasks:[]}:JSON.parse(JSON.stringify(g));
+ openSheet(isNew?T('obiettiviSett'):'Obiettivo',`
+  <input class="field" id="gTitle" placeholder="${T('aggiungiObiettivo')}" value="${esc(obj.title)}" style="font-weight:700;margin-bottom:12px">
+  <div class="eyebrow" style="margin-bottom:7px">${T('sottoTask')}</div>
+  <div id="gSubs" class="col" style="gap:7px;margin-bottom:8px"></div>
+  <input class="field" id="gSubInput" placeholder="${T('aggiungiSotto')} (invio)" style="margin-bottom:14px">
+  <div class="row" style="gap:8px"><button class="btn" id="gSave">${ic('check')} ${T('salva')}</button>
+   ${!isNew?`<button class="btn ghost" id="gDel" style="width:auto;background:var(--bad);color:#fff">${ic('trash')}</button>`:''}</div>`);
+ const draw=()=>{$('#gSubs').innerHTML=obj.subtasks.map((s,i)=>`<div class="row"><span class="check sm ${s.done?'on':''}" data-i="${i}">${ic('check')}</span><span class="grow">${esc(s.title)}</span><button class="iconaction" data-del="${i}">${ic('x')}</button></div>`).join('');
+  $$('#gSubs [data-i]').forEach(c=>c.onclick=()=>{obj.subtasks[+c.dataset.i].done=!obj.subtasks[+c.dataset.i].done;draw();});
+  $$('#gSubs [data-del]').forEach(c=>c.onclick=()=>{obj.subtasks.splice(+c.dataset.del,1);draw();});};draw();
+ $('#gSubInput').onkeydown=e=>{if(e.key==='Enter'){const v=e.target.value.trim();if(v){obj.subtasks.push({id:uid(),title:v,done:false});e.target.value='';draw();}}};
+ $('#gSave').onclick=()=>{obj.title=$('#gTitle').value.trim();if(!obj.title){toast('Titolo mancante');return;}
+  const a=DB.goals();if(isNew)a.push(obj);else{const o=a.find(x=>x.id===obj.id);Object.assign(o,obj);}DB.saveGoals(a);closeSheet();render();};
+ if(!isNew)$('#gDel').onclick=()=>{DB.saveGoals(DB.goals().filter(x=>x.id!==obj.id));closeSheet();render();};}
+
+function openRoutineSheet(opts){
+ opts=opts||{};const isEdit=!!opts.routine,fromGoal=opts.fromGoal,fromManager=!!opts.fromManager;
+ const routine=opts.routine?JSON.parse(JSON.stringify(opts.routine))
+   :fromGoal?{id:uid(),type:fromGoal.type||'daily',title:fromGoal.title||'',days:[0,1,2,3,4,5,6],subtasks:(fromGoal.subtasks||[]).map(s=>({title:s.title})),active:true,createdAt:Date.now(),lastRun:null}
+   :{id:uid(),type:'daily',title:'',days:[0,1,2,3,4,5,6],subtasks:[],active:true,createdAt:Date.now(),lastRun:null};
+ routine.days=routine.days||[0,1,2,3,4,5,6];routine.subtasks=routine.subtasks||[];
+ const back=()=>{if(fromManager)openRoutines();else closeSheet();};
+ openSheet(isEdit?T('routine'):T('nuovaRoutine'),`
+  <input class="field" id="rTitle" placeholder="${T('aggiungiObiettivo')}" value="${esc(routine.title)}" style="font-weight:700;margin-bottom:12px">
+  <div class="eyebrow" style="margin-bottom:7px">${T('tipo')}</div>
+  <div class="seg" id="rType" style="margin-bottom:14px"><button data-rt="daily" class="${routine.type==='daily'?'on':''}">${T('quotidiano')}</button><button data-rt="weekly" class="${routine.type==='weekly'?'on':''}">${T('settimanaleT')}</button></div>
+  <div class="eyebrow" style="margin-bottom:7px">${T('frequenza')}</div>
+  <div id="rFreq" style="margin-bottom:14px"></div>
+  <div class="eyebrow" style="margin-bottom:7px">${T('sottoTask')}</div>
+  <div id="rSubs" class="col" style="gap:7px;margin-bottom:8px"></div>
+  <input class="field" id="rSubInput" placeholder="${T('aggiungiSotto')} (invio)" style="margin-bottom:14px">
+  <div class="row" style="gap:8px"><button class="btn" id="rSave">${ic('check')} ${T('salva')}</button>
+   ${isEdit?`<button class="iconaction" id="rDel" style="width:46px;height:46px;background:var(--bad);color:#fff;border-radius:var(--r-md);flex:0 0 auto">${ic('trash')}</button>`:''}</div>`);
+ const DAYS=(LANG==='it'?DOW:DOWen).map(d=>d[0].toUpperCase());
+ const drawFreq=()=>{
+  if(routine.type==='weekly'){$('#rFreq').innerHTML=`<span class="pill accent">${ic('repeat')} ${T('ogniSett')}</span>`;return;}
+  $('#rFreq').innerHTML=`<div class="row" style="gap:6px;margin-bottom:9px">${DAYS.map((d,i)=>`<span class="chip ${routine.days.includes(i)?'on':''}" data-day="${i}" style="padding:7px 0;width:34px;justify-content:center">${d}</span>`).join('')}</div>
+   <div class="row" style="gap:7px"><button class="btn sm ghost" data-pre="all">${T('tuttiGiorni')}</button><button class="btn sm ghost" data-pre="wd">${T('feriali')}</button><button class="btn sm ghost" data-pre="we">${T('weekendF')}</button></div>`;
+  $$('#rFreq [data-day]').forEach(c=>c.onclick=()=>{const i=+c.dataset.day,k=routine.days.indexOf(i);if(k>=0)routine.days.splice(k,1);else routine.days.push(i);drawFreq();});
+  $$('#rFreq [data-pre]').forEach(b=>b.onclick=()=>{routine.days=b.dataset.pre==='all'?[0,1,2,3,4,5,6]:b.dataset.pre==='wd'?[0,1,2,3,4]:[5,6];drawFreq();});
+ };
+ const drawSubs=()=>{$('#rSubs').innerHTML=routine.subtasks.map((s,i)=>`<div class="row" style="gap:9px"><span class="subtle">•</span><span class="grow">${esc(s.title)}</span><button class="iconaction" data-del="${i}">${ic('x')}</button></div>`).join('');
+  $$('#rSubs [data-del]').forEach(c=>c.onclick=()=>{routine.subtasks.splice(+c.dataset.del,1);drawSubs();});};
+ drawFreq();drawSubs();
+ $$('#rType [data-rt]').forEach(b=>b.onclick=()=>{routine.type=b.dataset.rt;$$('#rType [data-rt]').forEach(x=>x.classList.toggle('on',x===b));drawFreq();});
+ $('#rSubInput').onkeydown=e=>{if(e.key==='Enter'){const v=e.target.value.trim();if(v){routine.subtasks.push({title:v});e.target.value='';drawSubs();}}};
+ $('#rSave').onclick=()=>{routine.title=$('#rTitle').value.trim();
+  if(!routine.title){toast('Titolo mancante');return;}
+  if(routine.type==='daily'&&!routine.days.length){toast(T('frequenza')+'?');return;}
+  const arr=DB.routines(),idx=arr.findIndex(x=>x.id===routine.id);
+  if(idx<0&&fromGoal){const today=todayStr();if(routine.type==='daily'&&fromGoal.date===today)routine.lastRun=today;if(routine.type==='weekly'&&fromGoal.weekOf===weekKey(today))routine.lastRun=weekKey(today);}
+  if(idx>=0)arr[idx]=routine;else arr.push(routine);DB.saveRoutines(arr);
+  if(fromGoal&&idx<0){const gs=DB.goals(),g=gs.find(x=>x.id===fromGoal.id);if(g){g.routineId=routine.id;DB.saveGoals(gs);}}
+  materializeRoutines();render();toast(T('ricorrente')+' ✓');back();};
+ if(isEdit)$('#rDel').onclick=()=>{DB.saveRoutines(DB.routines().filter(x=>x.id!==routine.id));render();back();};
+}
+function openRoutines(){
+ openSheet(T('gestisciRoutine'),`<div class="muted" style="font-size:12.5px;margin-bottom:12px">${T('routineHint')}</div>
+  <div id="rouList" class="col" style="gap:8px"></div>
+  <button class="btn" id="rouNew" style="margin-top:14px">${ic('plus')} ${T('nuovaRoutine')}</button>`);
+ const draw=()=>{const rs=DB.routines();
+  $('#rouList').innerHTML=rs.length?rs.map(r=>`<div class="card row" style="gap:11px;align-items:center;${r.active?'':'opacity:.55'}">
+    <span class="iconmini" style="background:var(--accent-soft);color:var(--accent)">${ic('repeat')}</span>
+    <div class="grow" data-edit="${r.id}" style="cursor:pointer;min-width:0"><div class="ell" style="font-weight:600">${esc(r.title)}</div>
+     <div class="eyebrow" style="font-size:9px">${freqLabel(r)}${r.subtasks&&r.subtasks.length?' · '+r.subtasks.length+' '+T('sottoTask'):''}</div></div>
+    <span class="switch ${r.active?'on':''}" data-toggle="${r.id}"></span>
+    <button class="iconaction" data-del="${r.id}">${ic('trash')}</button></div>`).join('')
+   :`<div class="empty" style="padding:30px">${ic('repeat')}<div>${T('nessunaRoutine')}</div></div>`;
+  $$('#rouList [data-edit]').forEach(el=>el.onclick=()=>{const r=DB.routines().find(x=>x.id===el.dataset.edit);if(r)openRoutineSheet({routine:r,fromManager:true});});
+  $$('#rouList [data-toggle]').forEach(el=>el.onclick=()=>{const arr=DB.routines(),r=arr.find(x=>x.id===el.dataset.toggle);if(r){r.active=!r.active;DB.saveRoutines(arr);if(r.active)materializeRoutines();render();draw();}});
+  $$('#rouList [data-del]').forEach(el=>el.onclick=()=>{DB.saveRoutines(DB.routines().filter(x=>x.id!==el.dataset.del));render();draw();});};
+ draw();
+ $('#rouNew').onclick=()=>openRoutineSheet({fromManager:true});
+}
+
+function openLongGoalSheet(g){
+ const isNew=!g||!g.id;
+ const obj=isNew?{id:uid(),type:'long',title:'',horizon:'quarter',due:endOfPeriod('quarter'),done:false,order:longGoals().length,createdAt:Date.now(),completedAt:null,subtasks:[]}:JSON.parse(JSON.stringify(g));
+ obj.subtasks=obj.subtasks||[];obj.horizon=obj.horizon||'date';
+ const HOR=[['date','dataSpec'],['quarter','trimestre'],['semester','semestre'],['year','anno']];
+ openSheet(isNew?T('nuovoTraguardo'):T('traguardo'),`
+  <input class="field" id="lgTitle" placeholder="${T('aggiungiObiettivo')}" value="${esc(obj.title)}" style="font-weight:700;margin-bottom:12px">
+  <div class="eyebrow" style="margin-bottom:7px">${T('orizzonte')}</div>
+  <div class="row" style="flex-wrap:wrap;gap:7px;margin-bottom:12px" id="lgHor">${HOR.map(([k,lbl])=>`<span class="chip ${obj.horizon===k?'on':''}" data-h="${k}">${T(lbl)}</span>`).join('')}</div>
+  <div id="lgDateWrap" style="margin-bottom:12px;${obj.horizon==='date'?'':'display:none'}"><input class="field" id="lgDate" type="date" value="${obj.horizon==='date'?(obj.due||todayStr()):todayStr()}"></div>
+  <div class="eyebrow" style="margin-bottom:7px">${T('sottoTask')}</div>
+  <div id="lgSubs" class="col" style="gap:7px;margin-bottom:8px"></div>
+  <input class="field" id="lgSubInput" placeholder="${T('aggiungiSotto')} (invio)" style="margin-bottom:14px">
+  <div class="row" style="gap:8px"><button class="btn" id="lgSave">${ic('check')} ${T('salva')}</button>
+   ${!isNew?`<button class="iconaction" id="lgDel" style="width:46px;height:46px;background:var(--bad);color:#fff;border-radius:var(--r-md);flex:0 0 auto">${ic('trash')}</button>`:''}</div>`);
+ const drawSubs=()=>{$('#lgSubs').innerHTML=obj.subtasks.map((s,i)=>`<div class="row" style="gap:9px"><span class="subtle">•</span><span class="grow">${esc(s.title)}</span><button class="iconaction" data-del="${i}">${ic('x')}</button></div>`).join('');
+  $$('#lgSubs [data-del]').forEach(c=>c.onclick=()=>{obj.subtasks.splice(+c.dataset.del,1);drawSubs();});};drawSubs();
+ $$('#lgHor [data-h]').forEach(b=>b.onclick=()=>{obj.horizon=b.dataset.h;$$('#lgHor [data-h]').forEach(x=>x.classList.toggle('on',x===b));$('#lgDateWrap').style.display=obj.horizon==='date'?'':'none';});
+ $('#lgSubInput').onkeydown=e=>{if(e.key==='Enter'){const v=e.target.value.trim();if(v){obj.subtasks.push({id:uid(),title:v,done:false});e.target.value='';drawSubs();}}};
+ $('#lgSave').onclick=()=>{obj.title=$('#lgTitle').value.trim();if(!obj.title){toast('Titolo mancante');return;}
+  obj.due=obj.horizon==='date'?($('#lgDate').value||todayStr()):endOfPeriod(obj.horizon);
+  const a=DB.goals();if(isNew)a.push(obj);else{const o=a.find(x=>x.id===obj.id);Object.assign(o,obj);}DB.saveGoals(a);closeSheet();state.tab='home';render();toast(T('traguardo')+' ✓');};
+ if(!isNew)$('#lgDel').onclick=()=>{DB.saveGoals(DB.goals().filter(x=>x.id!==obj.id));closeSheet();render();};
+}
+
+/* ===================== FOCUS MODE ===================== */
+function renderFocus(){
+ const t=todayStr(),daily=dailyOf(t);
+ const doneGoals=daily.filter(goalComplete).length;
+ const totTask=daily.reduce((n,g)=>n+((g.subtasks&&g.subtasks.length)?g.subtasks.length:1),0);
+ const doneTask=daily.reduce((n,g)=>n+((g.subtasks&&g.subtasks.length)?g.subtasks.filter(s=>s.done).length:(g.done?1:0)),0);
+ const pct=totTask?Math.round(doneTask/totTask*100):0;
+ const allDone=daily.length>0&&doneGoals===daily.length;
+ const trend=completedPerDay(7),tmax=Math.max(...trend.map(x=>x.value),1);
+ $('#focus').innerHTML=`<div class="fhead">${ic('expand')}<h2>${T('modalitaOggi')}</h2><button class="iconbtn" id="fClose" style="margin-left:auto;width:38px;height:38px;border-radius:12px;background:var(--surface);border:1px solid var(--border)">${ic('x')}</button></div>
+  <div class="fhero">${ring(pct,82,11)}
+   <div class="grow"><div class="eyebrow">${prettyDate(t)}</div>
+    <div class="fbignum">${doneGoals}/${daily.length} <span>${T('fatto')}</span></div>
+    <div class="fmeta">${doneTask}/${totTask} task${streak()>0?` · ${streak()} ${LANG==='it'?'di fila':'streak'}`:''}</div>
+    ${allDone?`<div class="fdone">${ic('check')} ${T('tuttoFatto')}</div>`:''}</div></div>
+  <div class="fbig">${daily.length?daily.map(g=>{const hasSub=g.subtasks&&g.subtasks.length,[d,tot]=goalDoneRatio(g),comp=goalComplete(g);
+    return `<div class="fgoal ${comp?'done':''}">
+     <div class="fgrow" data-fgoal="${g.id}">${checkbox(comp)}<span class="grow">${esc(g.title)}</span>${hasSub?`<span class="fpill">${d}/${tot}</span>`:''}</div>
+     ${hasSub?`<div class="fprog"><i style="width:${tot?d/tot*100:0}%"></i></div>
+      <div class="fsubs">${g.subtasks.map(s=>`<div class="fsub2 ${s.done?'done':''}" data-fsub="${g.id}" data-sid="${s.id}">${checkbox(s.done,'sm')}<span class="grow">${esc(s.title)}</span></div>`).join('')}</div>`:''}
+    </div>`;}).join(''):`<div class="muted" style="text-align:center;padding:30px">${T('nessunObiettivo')}</div>`}</div>
+  <div class="ftrend"><span class="eyebrow">${T('taskCompletate')} · 7${LANG==='it'?'gg':'d'}</span>
+   <div class="barchart" style="height:104px">${trend.map(it=>{const bh=it.value>0?Math.max(10,Math.round(it.value/tmax*100)):0;
+    return `<div class="barcol"><span class="ftval">${it.value||''}</span><div class="bartrack"><div class="bar" style="height:${bh}%"></div></div><span class="bl">${it.label}</span></div>`;}).join('')}</div></div>`;
+ $('#fClose').onclick=closeFocus;
+ $$('#focus [data-fgoal]').forEach(row=>row.onclick=()=>{const id=row.dataset.fgoal;withGoals(a=>{const g=a.find(x=>x.id===id);if(!g)return;
+   const all=g.subtasks&&g.subtasks.length?g.subtasks.every(s=>s.done):g.done;
+   if(g.subtasks&&g.subtasks.length)g.subtasks.forEach(s=>s.done=!all);g.done=!all;g.completedAt=goalComplete(g)?Date.now():null;});renderFocus();});
+ $$('#focus [data-fsub]').forEach(row=>row.onclick=e=>{e.stopPropagation();const id=row.dataset.fsub,sid=row.dataset.sid;withGoals(a=>{const g=a.find(x=>x.id===id);if(!g)return;
+   const s=g.subtasks.find(x=>x.id===sid);if(s)s.done=!s.done;g.done=g.subtasks.every(x=>x.done);g.completedAt=goalComplete(g)?Date.now():null;});renderFocus();});
+}
+function openFocus(){renderFocus();$('#focus').classList.add('on');
+ try{if(document.documentElement.requestFullscreen)document.documentElement.requestFullscreen();}catch(e){}}
+function closeFocus(){$('#focus').classList.remove('on');render();try{if(document.fullscreenElement)document.exitFullscreen();}catch(e){}}
+document.addEventListener('fullscreenchange',()=>{if(!document.fullscreenElement)$('#focus').classList.remove('on');});
+document.addEventListener('visibilitychange',()=>{if(!document.hidden){materializeRoutines();carryOverGoals();if(state.tab==='home')render();}});
+
+/* ===================== [JS-7] EXPORT / IMPORT ===================== */
+function download(name,content,type){const blob=content instanceof Blob?content:new Blob([content],{type:type||'text/plain'});
+ const u=URL.createObjectURL(blob),a=document.createElement('a');a.href=u;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(u),1000);}
+function exportJSON(){const data={schema:SCHEMA,exportedAt:new Date().toISOString(),goals:DB.goals(),notes:DB.notes(),expenses:DB.expenses(),cats:DB.cats(),routines:DB.routines(),settings:DB.settings()};
+ download('argo-backup-'+todayStr()+'.json',JSON.stringify(data,null,2),'application/json');}
+function exportCSV(){const rows=[['Data','Categoria','Metodo','Importo','Nota']].concat(DB.expenses().slice().sort((a,b)=>a.date.localeCompare(b.date)).map(e=>[e.date,e.category,e.method||'',String(e.amount).replace('.',','),e.note||'']));
+ const csv='﻿'+rows.map(r=>r.map(c=>/[",;\n]/.test(c)?'"'+c.replace(/"/g,'""')+'"':c).join(';')).join('\n');
+ download('spese-'+todayStr()+'.csv',csv,'text/csv');}
+async function exportXLSX(){
+ try{ if(!window.XLSX){await new Promise((res,rej)=>{const s=document.createElement('script');s.src='https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js';s.onload=res;s.onerror=rej;document.head.appendChild(s);});}
+  const X=window.XLSX, wb=X.utils.book_new();
+  const exp=DB.expenses().slice().sort((a,b)=>a.date.localeCompare(b.date));
+  const ws=X.utils.json_to_sheet(exp.map(e=>({Data:e.date,Categoria:e.category,Metodo:e.method||'',Importo:Number(e.amount),Nota:e.note||''})));
+  ws['!cols']=[{wch:12},{wch:14},{wch:12},{wch:10},{wch:30}];X.utils.book_append_sheet(wb,ws,'Spese');
+  // riepilogo mensile per categoria
+  const piv={};exp.forEach(e=>{const m=e.date.slice(0,7);piv[m]=piv[m]||{};piv[m][e.category]=(piv[m][e.category]||0)+Number(e.amount);});
+  const cats=DB.cats();const sum=[['Mese',...cats,T('totale')]];Object.keys(piv).sort().forEach(m=>{const r=[m];let tot=0;cats.forEach(c=>{const v=piv[m][c]||0;r.push(v);tot+=v;});r.push(tot);sum.push(r);});
+  const ws2=X.utils.aoa_to_sheet(sum);X.utils.book_append_sheet(wb,ws2,T('riepilogoMese'));
+  X.writeFile(wb,'spese-'+todayStr()+'.xlsx');
+ }catch(e){toast('Excel non disponibile offline — uso CSV');exportCSV();}}
+function exportNotesMD(){ // Obsidian-flavored: un file .md per nota, zip-less → concateno con separatori se più di una? Scarico la più recente + un indice.
+ // Per semplicità offline: un singolo .md con ogni nota in sezione + frontmatter del primo. Ideale: share per file su mobile.
+ const notes=DB.notes();if(!notes.length){toast('Nessuna nota');return;}
+ notes.forEach(n=>{const fm=`---\ntitle: ${JSON.stringify(n.title||'')}\ndate: ${new Date(n.createdAt).toISOString().slice(0,10)}\ntags: [${(n.tags||[]).join(', ')}]\n---\n\n`;
+  const body=(n.title?`# ${n.title}\n\n`:'')+(n.body||'')+'\n';
+  download(slug(n.title||'nota-'+n.id.slice(0,5))+'.md',fm+body,'text/markdown');});
+ toast(notes.length+' note esportate (.md)');}
+function exportTasksICS(){const goals=DB.goals().filter(g=>g.type==='daily'||(g.type==='long'&&g.due));
+ const dt=s=>s.replace(/-/g,'');let ics='BEGIN:VCALENDAR\nVERSION:2.0\nPRODID:-//Argo//Obiettivi//IT\n';
+ goals.forEach(g=>{ics+=`BEGIN:VEVENT\nUID:${g.id}@argo\nDTSTART;VALUE=DATE:${dt(g.date||g.due)}\nSUMMARY:${(goalComplete(g)?'[x] ':'[ ] ')+g.title}\nEND:VEVENT\n`;});
+ ics+='END:VCALENDAR';download('obiettivi-'+todayStr()+'.ics',ics,'text/calendar');
+ // checklist markdown
+ const md=goals.map(g=>`- [${goalComplete(g)?'x':' '}] ${g.title}${(g.subtasks||[]).map(s=>`\n  - [${s.done?'x':' '}] ${s.title}`).join('')}`).join('\n');
+ download('checklist-'+todayStr()+'.md',md,'text/markdown');}
+function exportStandaloneHTML(){const data={goals:DB.goals(),notes:DB.notes(),expenses:DB.expenses(),cats:DB.cats()};
+ const html=`<!doctype html><html><head><meta charset="utf-8"><title>Argo · snapshot ${todayStr()}</title>
+ <style>body{font-family:system-ui;max-width:760px;margin:24px auto;padding:0 16px;color:#1A1D24;background:#F6F4EE}
+ h1{font-size:22px}h2{margin-top:28px;border-bottom:1px solid #DDD7C7;padding-bottom:6px}.t{color:#5B626E}
+ .done{text-decoration:line-through;color:#7B8290}li{margin:3px 0}code{background:#EFECE3;padding:1px 5px;border-radius:4px}</style></head>
+ <body><h1>Obiettivi &amp; Note — snapshot ${todayStr()}</h1>
+ <h2>Obiettivi</h2><ul>${data.goals.map(g=>`<li class="${goalComplete(g)?'done':''}">${esc(g.title)} <span class="t">${g.type==='weekly'?'(sett.)':g.type==='long'?('▶ '+(g.due||'')):g.date}</span>${(g.subtasks||[]).map(s=>`<br>&nbsp;&nbsp;${s.done?'☑':'☐'} ${esc(s.title)}`).join('')}</li>`).join('')}</ul>
+ <h2>Spese</h2><ul>${data.expenses.slice().sort((a,b)=>b.date.localeCompare(a.date)).map(e=>`<li><code>${eur(e.amount)}</code> ${esc(e.category)} — ${esc(e.note||'')} <span class="t">${e.date}</span></li>`).join('')}</ul>
+ <h2>Note</h2>${data.notes.map(n=>`<div><h3>${esc(n.title||'(senza titolo)')}</h3><p>${esc(n.body).replace(/\n/g,'<br>')}</p><p class="t">${(n.tags||[]).map(t=>'#'+t).join(' ')}</p></div>`).join('')}
+ <p class="t" style="margin-top:40px;font-size:12px">Generato offline da Obiettivi &amp; Note (Argo).</p></body></html>`;
+ download('argo-snapshot-'+todayStr()+'.html',html,'text/html');}
+function importJSON(file){const r=new FileReader();r.onload=()=>{try{const d=JSON.parse(r.result);
+  if(d.goals)DB.saveGoals(d.goals);if(d.notes)DB.saveNotes(d.notes);if(d.expenses)DB.saveExpenses(d.expenses);if(d.cats)DB.saveCats(d.cats);if(d.routines)DB.saveRoutines(d.routines);
+  closeSheet();render();toast('Backup importato ✓');}catch(e){toast('File non valido');}};r.readAsText(file);}
+
+function openExport(){openSheet(T('esporta'),`<div class="col" style="gap:9px">
+  <button class="btn ghost" data-x="xlsx">${ic('download')} ${T('speseExcel')}</button>
+  <button class="btn ghost" data-x="csv">${ic('download')} ${T('speseCsv')}</button>
+  <button class="btn ghost" data-x="md">${ic('share')} ${T('noteMd')}</button>
+  <button class="btn ghost" data-x="ics">${ic('cal')} ${T('taskIcs')}</button>
+  <button class="btn ghost" data-x="html">${ic('download')} ${T('htmlStandalone')}</button>
+  <button class="btn ghost" data-x="json">${ic('download')} ${T('backupJson')}</button>
+  <label class="btn ghost" style="cursor:pointer">${ic('share')} ${T('importa')}<input type="file" accept="application/json" id="impFile" hidden></label></div>`);
+ const map={xlsx:exportXLSX,csv:exportCSV,md:exportNotesMD,ics:exportTasksICS,html:exportStandaloneHTML,json:exportJSON};
+ $$('#sheetBody [data-x]').forEach(b=>b.onclick=()=>map[b.dataset.x]());
+ $('#impFile').onchange=e=>{if(e.target.files[0])importJSON(e.target.files[0]);};}
+
+/* ===================== [JS-8] SETTINGS / TEMA / I18N / INIT ===================== */
+function setTheme(t){document.documentElement.setAttribute('data-theme',t);try{localStorage.setItem('argo.theme',t);}catch(e){}
+ $('#themeBtn').innerHTML=ic(t==='dark'?'sun':'moon');
+ const metas=$$('meta[name=theme-color]');/* ok: media-based */}
+function setLayoutVar(k,val){document.documentElement.style.setProperty('--'+k,val);const s=DB.settings();s.layout=s.layout||{};s.layout[k]=val;DB.saveSettings(s);}
+function applyLayout(){const l=(DB.settings().layout)||{};['ui','sp','cr','tx'].forEach(k=>{if(l[k])document.documentElement.style.setProperty('--'+k,l[k]);});}
+function setAccent(hex){const s=DB.settings();s.accent=hex;DB.saveSettings(s);document.documentElement.style.setProperty('--accent',hex);}
+function applyAccent(){const a=DB.settings().accent;if(a)document.documentElement.style.setProperty('--accent',a);}
+function setLang(l){LANG=l;const s=DB.settings();s.lang=l;DB.saveSettings(s);document.documentElement.lang=l;render();}
+function setSync(statev){const b=$('#syncBadge'),txt=$('#syncText');b.className='synced '+(statev||'');
+ txt.textContent=statev==='on'?T('connesso'):(statev==='off'?'Offline':T('locale'));}
+
+const ACCENTS=['#C15F3C','#3B5BDB','#5E8C4A','#7A6FB0','#D06A8C','#0AA39C'];
+function openSettings(){const s=DB.settings(),l=s.layout||{};
+ openSheet(T('impostazioni'),`
+  <h2 class="sec" style="margin-top:0">${T('aspetto')}</h2>
+  <div class="settingrow"><div class="grow"><div class="lbl">${T('tema')}</div></div>
+   <div class="seg"><button data-th="light" class="${document.documentElement.getAttribute('data-theme')==='light'?'on':''}">${T('it')==='it'?'Chiaro':'Light'}</button><button data-th="dark" class="${document.documentElement.getAttribute('data-theme')==='dark'?'on':''}">${LANG==='it'?'Scuro':'Dark'}</button></div></div>
+  <div class="settingrow"><div class="grow"><div class="lbl">${T('lingua')}</div></div>
+   <div class="seg"><button data-lg="it" class="${LANG==='it'?'on':''}">IT</button><button data-lg="en" class="${LANG==='en'?'on':''}">EN</button></div></div>
+  <div class="settingrow"><div class="grow"><div class="lbl">${T('accento')}</div></div>
+   <div class="row" style="gap:8px">${ACCENTS.map(c=>`<span class="swatch ${s.accent===c||(!s.accent&&c==='#C15F3C')?'on':''}" data-ac="${c}" style="background:${c}"></span>`).join('')}</div></div>
+  <div class="settingrow col" style="align-items:stretch;gap:9px"><div class="row"><span class="lbl grow">${T('scalaUI')}</span><span class="mono" id="uiV">${Math.round((l.ui||1)*100)}%</span></div><input type="range" id="uiR" min="0.85" max="1.2" step="0.01" value="${l.ui||1}"></div>
+  <div class="settingrow col" style="align-items:stretch;gap:9px"><div class="row"><span class="lbl grow">${T('spaziatura')}</span><span class="mono" id="spV">${Math.round((l.sp||1)*100)}%</span></div><input type="range" id="spR" min="0.8" max="1.4" step="0.01" value="${l.sp||1}"></div>
+  <div class="settingrow col" style="align-items:stretch;gap:9px"><div class="row"><span class="lbl grow">${T('raggio')}</span><span class="mono" id="crV">${Math.round((l.cr||1)*100)}%</span></div><input type="range" id="crR" min="0" max="1.6" step="0.02" value="${l.cr||1}"></div>
+  <div class="settingrow col" style="align-items:stretch;gap:9px"><div class="row"><span class="lbl grow">${T('testo')}</span><span class="mono" id="txV">${Math.round((l.tx||1)*100)}%</span></div><input type="range" id="txR" min="0.9" max="1.15" step="0.01" value="${l.tx||1}"></div>
+
+  <h2 class="sec">${T('categorie')} & ${T('budget')}</h2>
+  <div class="settingrow col" style="align-items:stretch"><div class="row" style="flex-wrap:wrap;gap:7px" id="catMgr">${DB.cats().map(c=>`<span class="chip" data-cat="${esc(c)}"><span class="dot" style="background:${catVar(c)}"></span>${esc(c)} <b style="margin-left:4px;opacity:.6" data-delcat="${esc(c)}">✕</b></span>`).join('')}<span class="chip" id="addCat" style="border-style:dashed">${T('aggiungiCat')}</span></div></div>
+  <div class="settingrow"><div class="grow"><div class="lbl">${T('budgetMensile')}</div></div><input class="field" id="budgetIn" type="number" value="${s.budget||400}" style="width:110px"></div>
+
+  <h2 class="sec">${T('routine')}</h2>
+  <button class="btn ghost" data-act="open-routines" style="justify-content:space-between"><span class="row" style="gap:8px">${ic('repeat')} ${T('gestisciRoutine')}</span><span class="pill">${DB.routines().length}</span></button>
+  <div class="settingrow" style="margin-top:10px"><div class="grow"><div class="lbl">${T('carryOver')}</div><div class="desc">${T('carryOverDesc')}</div></div><span class="switch ${s.carryOver?'on':''}" id="carrySwitch"></span></div>
+
+  <h2 class="sec">${T('firebaseTit')}</h2>
+  <div class="settingrow col" style="align-items:stretch;gap:8px"><div class="desc">${T('firebaseDesc')}</div>
+   <details class="fbhelp"><summary>${T('comeSync')}</summary>
+    <ol>${(LANG==='it'?[
+      'Crea un progetto gratuito su <b>console.firebase.google.com</b> (piano Spark, nessuna carta).',
+      'Authentication → <b>Email/Password</b>: abilitala e crea il tuo utente (la tua email + una password).',
+      'Firestore Database → crea il DB, poi <b>Rules</b>: incolla il contenuto di <code>firebase/firestore.rules</code> e Pubblica.',
+      'Project settings ⚙️ → Le tue app → <b>Web</b> (&lt;/&gt;): copia il JSON di <code>firebaseConfig</code>.',
+      'Incolla qui sotto config + email + password e premi <b>Connetti</b>. Da lì la sync è automatica e in tempo reale tra telefono e PC.'
+    ]:[
+      'Create a free project at <b>console.firebase.google.com</b> (Spark plan, no card).',
+      'Authentication → <b>Email/Password</b>: enable it and create your user (your email + a password).',
+      'Firestore Database → create it, then <b>Rules</b>: paste <code>firebase/firestore.rules</code> and Publish.',
+      'Project settings ⚙️ → Your apps → <b>Web</b> (&lt;/&gt;): copy the <code>firebaseConfig</code> JSON.',
+      'Paste config + email + password below and hit <b>Connect</b>. From there sync is automatic and realtime across phone and PC.'
+    ]).map(x=>`<li>${x}</li>`).join('')}</ol></details>
+   <textarea class="field" id="fbCfg" placeholder='{ "apiKey": "...", "authDomain": "...", "projectId": "..." }' style="min-height:70px;font-family:var(--font-mono);font-size:12px">${s.firebase?esc(JSON.stringify(s.firebase)):''}</textarea>
+   <div class="row" style="gap:8px"><input class="field" id="fbEmail" placeholder="${T('email')}" style="flex:1"><input class="field" id="fbPw" type="password" placeholder="${T('password')}" style="flex:1"></div>
+   <div class="row" style="gap:8px"><button class="btn sm" id="fbConnect">${T('connetti')} & ${T('accedi')}</button><button class="btn sm ghost" id="fbOut">${T('esci')}</button></div></div>
+
+  <h2 class="sec">${T('datiSync')}</h2>
+  <button class="btn ghost danger" id="wipeBtn" style="background:var(--bad);color:#fff">${ic('trash')} ${T('svuota')}</button>
+  <div class="eyebrow" style="text-align:center;margin-top:18px">Obiettivi &amp; Note · Argo · offline-first</div>`);
+
+ // wiring settings
+ $$('#sheetBody [data-th]').forEach(b=>b.onclick=()=>{setTheme(b.dataset.th);$$('#sheetBody [data-th]').forEach(x=>x.classList.toggle('on',x===b));});
+ $$('#sheetBody [data-lg]').forEach(b=>b.onclick=()=>{setLang(b.dataset.lg);openSettings();});
+ $$('#sheetBody [data-ac]').forEach(b=>b.onclick=()=>{setAccent(b.dataset.ac);$$('#sheetBody [data-ac]').forEach(x=>x.classList.toggle('on',x===b));});
+ const rng=(id,key,vid)=>{const r=$('#'+id);r.oninput=()=>{document.documentElement.style.setProperty('--'+key,r.value);$('#'+vid).textContent=Math.round(r.value*100)+'%';};
+  r.onchange=()=>setLayoutVar(key,r.value);};
+ rng('uiR','ui','uiV');rng('spR','sp','spV');rng('crR','cr','crV');rng('txR','tx','txV');
+ $('#budgetIn').onchange=e=>{const s2=DB.settings();s2.budget=Number(e.target.value)||400;DB.saveSettings(s2);};
+ $('#carrySwitch').onclick=()=>{const s2=DB.settings();s2.carryOver=!s2.carryOver;DB.saveSettings(s2);$('#carrySwitch').classList.toggle('on',s2.carryOver);if(s2.carryOver)carryOverGoals();render();};
+ $('#addCat').onclick=()=>{const name=prompt(T('nomeCategoria'));if(name&&name.trim()){const c=DB.cats();if(!c.includes(name.trim())){c.push(name.trim());DB.saveCats(c);openSettings();}}};
+ $$('#sheetBody [data-delcat]').forEach(b=>b.onclick=ev=>{ev.stopPropagation();const c=DB.cats().filter(x=>x!==b.dataset.delcat);DB.saveCats(c);openSettings();});
+ $('#fbConnect').onclick=async()=>{try{const cfg=JSON.parse($('#fbCfg').value);const s2=DB.settings();s2.firebase=cfg;DB.saveSettings(s2);
+   await Cloud.init();await Cloud.signIn($('#fbEmail').value.trim(),$('#fbPw').value);toast('Firebase connesso ✓');closeSheet();}catch(e){toast('Config/login non validi');console.warn(e);}};
+ $('#fbOut').onclick=async()=>{await Cloud.signOutNow();toast('Disconnesso');};
+ $('#wipeBtn').onclick=()=>{if(confirm(T('svuotaConferma'))){DB.wipe();closeSheet();location.reload();}};
+}
+
+function toast(msg){const e=$('#toast');e.textContent=msg;e.classList.add('on');clearTimeout(e._t);e._t=setTimeout(()=>e.classList.remove('on'),1700);}
+
+/* INIT */
+function init(){
+ migrate();
+ const s=DB.settings();
+ if(s.lang)LANG=s.lang; document.documentElement.lang=LANG;
+ setTheme(document.documentElement.getAttribute('data-theme')||'light');
+ $('[data-act="open-settings"]').innerHTML=ic('set');
+ $('[data-act="open-export"]').innerHTML=ic('share');
+ applyLayout();applyAccent();
+ seedIfEmpty();
+ materializeRoutines();
+ carryOverGoals();
+ render();
+ if(DB.settings().firebase)Cloud.init();else setSync(null);
+}
+init();
+/* PWA: service worker per funzionamento offline + installabilità */
+if('serviceWorker' in navigator){addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(()=>{}));}
+</script>
+</body>
+</html>

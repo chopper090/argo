@@ -1,0 +1,19 @@
+rules_version = '2';
+
+// Obiettivi & Note (Argo) — regole single-user, tutto bloccato all'UID proprietario.
+// Nessuno può leggere/scrivere dati di un altro utente. Compatibile piano Spark.
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Tutti i dati vivono sotto users/{uid}/...
+    match /users/{userId}/{document=**} {
+      allow read, write: if request.auth != null
+                         && request.auth.uid == userId;
+    }
+
+    // Default deny per tutto il resto.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

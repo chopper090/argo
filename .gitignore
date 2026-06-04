@@ -1,0 +1,36 @@
+# Claude / dev tooling
+.claude/
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Editors
+.vscode/
+.idea/
+*.swp
+*~
+
+# Dependencies / build
+node_modules/
+dist/
+build/
+.next/
+
+# Firebase / secrets — NON committare MAI chiavi private
+.env
+.env.*
+**/serviceAccount*.json
+**/*-firebase-adminsdk-*.json
+.firebase/
+firebase-debug.log
+.runtimeconfig.json
+
+# Python
+__pycache__/
+*.py[cod]
+
+# Backup / temp
+*.bak
+*.tmp
