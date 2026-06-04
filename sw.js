@@ -1,6 +1,6 @@
 /* Argo · Obiettivi & Note — service worker (app-shell offline-first).
    Bump CACHE per forzare l'aggiornamento dello shell. */
-const CACHE = 'argo-v1';
+const CACHE = 'argo-v1.0.0';
 const ASSETS = ['./', './index.html', './manifest.webmanifest', './icon-192.png', './icon-512.png'];
 
 self.addEventListener('install', e => {

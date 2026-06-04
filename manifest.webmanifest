@@ -1,4 +1,5 @@
 {
+  "version": "1.0.0",
   "name": "Obiettivi & Note",
   "short_name": "Obiettivi",
   "description": "Obiettivi, note e spese — offline-first, con sync Firebase opzionale.",
