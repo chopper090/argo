@@ -175,6 +175,22 @@ main{flex:1 1 auto;padding:16px 16px 120px;width:100%}
 .focus .ftrend .eyebrow{margin-bottom:13px;display:block}
 .focus .ftval{font-family:var(--font-mono);font-size:11px;font-weight:700;color:var(--accent);min-height:14px;line-height:1}
 .focus .ftrend .bartrack{max-width:34px}
+/* INTRO primo avvio */
+.intro{position:fixed;inset:0;z-index:90;display:none;flex-direction:column;align-items:center;justify-content:center;
+  padding:clamp(20px,6vw,48px);overflow:auto;background:radial-gradient(1200px 560px at 50% -10%,var(--accent-soft),transparent 60%),var(--bg)}
+.intro.on{display:flex}
+.introwrap{max-width:460px;width:100%;margin:auto;display:flex;flex-direction:column;align-items:center;text-align:center;gap:15px}
+.introicon{width:76px;height:76px;border-radius:21px;box-shadow:var(--shadow-lg)}
+.introwrap h2{margin:1px 0 0;font-size:clamp(23px,6vw,31px);letter-spacing:-.02em}
+.introtag{color:var(--text-muted);font-size:15px;margin:0;max-width:32ch;line-height:1.5}
+.introvid{width:100%;border-radius:var(--r-lg);border:1px solid var(--border-strong);box-shadow:var(--shadow-lg);background:#000;aspect-ratio:16/10}
+.introph{width:100%;background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);box-shadow:var(--shadow-md);padding:18px}
+.introhi{display:flex;flex-direction:column;gap:12px;text-align:left}
+.introhi .li{display:flex;align-items:center;gap:12px;font-size:14px;font-weight:600}
+.introhi .li .ic{width:34px;height:34px;border-radius:10px;display:grid;place-items:center;background:var(--accent-soft);color:var(--accent);flex:0 0 auto}
+.introphnote{margin-top:14px;font-family:var(--font-mono);font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--text-subtle);border-top:1px dashed var(--border-strong);padding-top:12px}
+.intro .btn{max-width:320px;margin-top:4px}
+.introskip{font-family:var(--font-mono);font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--text-subtle);padding:8px}
 
 /* ========================== [CSS-3] COMPONENTI ========================== */
 .card{background:var(--surface);border:1px solid var(--border);border-radius:calc(var(--r-md)*var(--cr));
@@ -335,6 +351,7 @@ textarea.field{resize:vertical;line-height:1.6;min-height:90px}
 <div class="sheet" id="sheet"><div class="grab"></div><div class="shead"><h2 id="sheetTitle"></h2><button class="x" data-act="close-sheet">✕</button></div><div class="sbody" id="sheetBody"></div></div>
 <div class="toast" id="toast"></div>
 <div class="focus" id="focus"></div>
+<div class="intro" id="intro"></div>
 
 <script>
 "use strict";
@@ -394,7 +411,8 @@ const STR={
    carryOver:'Riporta non completati',carryOverDesc:'Gli obiettivi non completati ricompaiono il giorno dopo.',riportato:'Riportato da un giorno precedente',
    lungoTermine:'Obiettivi a lungo termine',traguardo:'Traguardo',nuovoTraguardo:'Nuovo traguardo',aggiungiTraguardo:'Aggiungi traguardo…',
    orizzonte:'Orizzonte',dataSpec:'Data',trimestre:'Trimestre',semestre:'Semestre',anno:'Anno',scaduto:'Scaduto',scadeIl:'scade',modifica:'Modifica',metodo:'Metodo',
-   taskCompletate:'Task completate',tuttoFatto:'Tutto fatto!',comeSync:'Come sincronizzare con Firebase?'},
+   taskCompletate:'Task completate',tuttoFatto:'Tutto fatto!',comeSync:'Come sincronizzare con Firebase?',
+   benvenuto:'Benvenuto',inizia:'Inizia',salta:'Salta',introTag:'Obiettivi, note e spese — sul tuo telefono, anche offline.',introVideoQui:'Qui apparirà il video introduttivo'},
  en:{oggi:'Today',ieri:'Yesterday',ora:'now',home:'Today',storico:'History',spese:'Expenses',note:'Notes',
    settimana:'Week',obiettiviGiorno:'Today\'s goals',nessunObiettivo:'No goals for today',
    aggiungiObiettivo:'Add goal…',aggiungiSotto:'Add subtask…',obiettiviSett:'Weekly goals',
@@ -424,7 +442,8 @@ const STR={
    carryOver:'Carry over unfinished',carryOverDesc:'Unfinished daily goals reappear the next day.',riportato:'Carried over from a previous day',
    lungoTermine:'Long-term goals',traguardo:'Milestone',nuovoTraguardo:'New milestone',aggiungiTraguardo:'Add milestone…',
    orizzonte:'Horizon',dataSpec:'Date',trimestre:'Quarter',semestre:'Semester',anno:'Year',scaduto:'Overdue',scadeIl:'due',modifica:'Edit',metodo:'Method',
-   taskCompletate:'Tasks completed',tuttoFatto:'All done!',comeSync:'How to sync with Firebase?'}
+   taskCompletate:'Tasks completed',tuttoFatto:'All done!',comeSync:'How to sync with Firebase?',
+   benvenuto:'Welcome',inizia:'Get started',salta:'Skip',introTag:'Goals, notes and expenses — on your phone, even offline.',introVideoQui:'The intro video will appear here'}
 };
 const T=k=>(STR[LANG][k]!=null?STR[LANG][k]:k);
 
@@ -1024,6 +1043,33 @@ function closeFocus(){$('#focus').classList.remove('on');render();try{if(documen
 document.addEventListener('fullscreenchange',()=>{if(!document.fullscreenElement)$('#focus').classList.remove('on');});
 document.addEventListener('visibilitychange',()=>{if(!document.hidden){materializeRoutines();carryOverGoals();if(state.tab==='home')render();}});
 
+/* ===================== INTRO (solo al primo avvio) =====================
+   Overlay one-shot gated da localStorage 'introSeen'. Mostra il video
+   `intro.mp4` se presente, altrimenti un placeholder brandizzato.
+   Per inserire il video: metti intro.mp4 nella root del repo. [VIDEO] */
+function showIntro(){
+ const items=LANG==='it'
+   ? [['target','Obiettivi giornalieri, settimanali e a lungo termine'],['repeat','Routine ricorrenti e Modalità Oggi'],['exp','Spese e note, con sync opzionale']]
+   : [['target','Daily, weekly and long-term goals'],['repeat','Recurring routines and Today mode'],['exp','Expenses and notes, optional sync']];
+ $('#intro').innerHTML=`<div class="introwrap">
+   <img src="icon-192.png" alt="" class="introicon">
+   <div><div class="eyebrow">${T('benvenuto')}</div><h2>Obiettivi &amp; Note</h2></div>
+   <p class="introtag">${T('introTag')}</p>
+   <div id="introMedia" style="width:100%"></div>
+   <div id="introPh" class="introph"><div class="introhi">${items.map(([i,t])=>`<div class="li"><span class="ic">${ic(i)}</span><span>${t}</span></div>`).join('')}</div></div>
+   <button class="btn" id="introStart">${ic('check')} ${T('inizia')}</button>
+   <button class="introskip" id="introSkip">${T('salta')}</button></div>`;
+ $('#intro').classList.add('on');
+ $('#introStart').onclick=dismissIntro; $('#introSkip').onclick=dismissIntro;
+ /* Inietta il <video> solo se intro.mp4 esiste davvero (evita un media element perennemente in caricamento). */
+ fetch('intro.mp4',{method:'HEAD'}).then(r=>{if(!r.ok)return;
+   $('#introMedia').innerHTML='<video id="introVid" class="introvid" playsinline controls autoplay muted poster="icon-512.png"><source src="intro.mp4" type="video/mp4"></video>';
+   const ph=$('#introPh');if(ph)ph.style.display='none';
+ }).catch(()=>{});
+}
+function dismissIntro(){LS.set('introSeen',true);const v=$('#introVid');if(v){try{v.pause();}catch(e){}}
+ $('#intro').classList.remove('on');setTimeout(()=>{$('#intro').innerHTML='';},320);}
+
 /* ===================== [JS-7] EXPORT / IMPORT ===================== */
 function download(name,content,type){const blob=content instanceof Blob?content:new Blob([content],{type:type||'text/plain'});
  const u=URL.createObjectURL(blob),a=document.createElement('a');a.href=u;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(u),1000);}
@@ -1176,6 +1222,7 @@ function init(){
  materializeRoutines();
  carryOverGoals();
  render();
+ if(!LS.get('introSeen',false))showIntro();
  if(DB.settings().firebase)Cloud.init();else setSync(null);
 }
 init();
