@@ -14,8 +14,9 @@ Markdown/.ics/HTML. **Firebase Firestore opzionale** (piano Spark) per sync mult
 **Dove stanno i dati.** `localStorage` granulare = sorgente di verità locale; Firestore è
 un layer di sync opzionale (rete = opzionale, non necessaria).
 
-**Come si edita.** Tutto in `index.html` (stato centrale + render). Per le icone: preferire
-`_scripts/gen_pwa_icons.py` del workspace al posto del `gen_icons.py` locale.
+**Come si edita.** Tutto in `index.html` (stato centrale + render). Le icone le disegna
+`gen_icons.py` locale (il **check** bespoke di Argo, terracotta) — tienilo; `_scripts/gen_pwa_icons.py`
+è solo il generatore *lettermark* generico per le nuove app.
 
 **Gotcha.** `.claude/launch.json` conteneva un path errato (`Tools/Argo` invece di `Argo`).
 `intro.mp4` è pesante: valutarne il `.gitignore`. Estensione prevista: bot Telegram (Fase 3).
